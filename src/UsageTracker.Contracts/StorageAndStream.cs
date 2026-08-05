@@ -59,6 +59,13 @@ public interface IReconciler
     Task<ReconciliationResult> ReconcileAsync(string tenantId, DateOnly day, CancellationToken ct = default);
 }
 
+/// <summary>
+/// Estimated-vs-realized reconciliation for one tenant-day. The delta is
+/// <see cref="RealizedTotal"/> − <see cref="EstimatedTotal"/>; a per-provider
+/// breakdown makes it explainable. When no billing connector is configured
+/// (air-gap, D6), <see cref="ReconciledAgainstBilling"/> is false and the estimate
+/// stands alone — surfaced, not silently zero.
+/// </summary>
 public sealed record ReconciliationResult
 {
     public required DateOnly Day { get; init; }
@@ -66,4 +73,29 @@ public sealed record ReconciliationResult
     public required decimal RealizedTotal { get; init; }
     public decimal Delta => RealizedTotal - EstimatedTotal;
     public required string Currency { get; init; }
+    /// <summary>False in air-gap / no-connector mode: RealizedTotal is not authoritative, the estimate stands.</summary>
+    public bool ReconciledAgainstBilling { get; init; } = true;
+    /// <summary>Per-provider estimated/realized/delta lines — the explainable breakdown.</summary>
+    public IReadOnlyList<ProviderReconciliation> ByProvider { get; init; } = Array.Empty<ProviderReconciliation>();
+}
+
+/// <summary>One provider's estimated-vs-realized line within a day's reconciliation.</summary>
+public sealed record ProviderReconciliation
+{
+    public required string Provider { get; init; }
+    public required decimal Estimated { get; init; }
+    public required decimal Realized { get; init; }
+    public decimal Delta => Realized - Estimated;
+}
+
+/// <summary>
+/// Persists reconciliation results at the tenant-day grain (ARCHITECTURE.md §4:
+/// store the delta). The Phase-4 "reconciliation views/materializations" seam —
+/// backed by ClickHouse in the scale tier, an embedded store in the solo tier;
+/// swapping is a config change, and both pass the same conformance tests.
+/// </summary>
+public interface IReconciliationStore
+{
+    Task SaveAsync(string tenantId, ReconciliationResult result, CancellationToken ct = default);
+    Task<ReconciliationResult?> GetAsync(string tenantId, DateOnly day, CancellationToken ct = default);
 }

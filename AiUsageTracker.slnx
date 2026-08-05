@@ -9,6 +9,7 @@
     <Project Path="src/UsageTracker.Ingestion.Otlp/UsageTracker.Ingestion.Otlp.csproj" />
     <Project Path="src/UsageTracker.Normalization/UsageTracker.Normalization.csproj" />
     <Project Path="src/UsageTracker.Plugins/UsageTracker.Plugins.csproj" />
+    <Project Path="src/UsageTracker.Reconciliation/UsageTracker.Reconciliation.csproj" />
     <Project Path="src/UsageTracker.Storage.InMemory/UsageTracker.Storage.InMemory.csproj" />
     <Project Path="src/UsageTracker.Storage.Sqlite/UsageTracker.Storage.Sqlite.csproj" />
   </Folder>

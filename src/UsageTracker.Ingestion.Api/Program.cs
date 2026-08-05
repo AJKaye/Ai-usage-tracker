@@ -3,6 +3,7 @@ using UsageTracker.Cost;
 using UsageTracker.Ingestion.Api;
 using UsageTracker.Ingestion.Otlp;
 using UsageTracker.Normalization;
+using UsageTracker.Reconciliation;
 using UsageTracker.Storage.InMemory;
 using UsageTracker.Storage.Sqlite;
 
@@ -27,6 +28,18 @@ builder.Services.AddSingleton<ICostEngine>(sp => TieredCostEngine.CreateDefault(
 // from its rate snapshot, or re-price it against today's live catalog.
 builder.Services.AddSingleton<ICostRecomputer>(sp =>
     new SnapshotCostRecomputer(sp.GetRequiredService<ICostEngine>()));
+
+// --- Phase 4: reconciliation (estimated vs realized billing) ----------------
+// Billing connectors are OPTIONAL: none are registered by default, so the solo
+// / air-gap build reconciles nothing external and the estimate stands (the
+// reconciler flags ReconciledAgainstBilling=false). A deployment with billing
+// credentials registers OpenAiBillingConnector / AnthropicBillingConnector here.
+builder.Services.AddSingleton<IReconciliationStore, InMemoryReconciliationStore>();
+builder.Services.AddSingleton<IReconciler>(sp => new CostReconciler(
+    sp.GetRequiredService<IEventStore>(),
+    sp.GetServices<IBillingConnector>(),
+    sp.GetRequiredService<IReconciliationStore>(),
+    msg => sp.GetRequiredService<ILoggerFactory>().CreateLogger("reconciler").LogWarning("{Msg}", msg)));
 
 // The ONLY line that changes per deployment tier — every profile satisfies IEventStore.
 builder.Services.AddSingleton<IEventStore>(_ => profile switch
@@ -161,6 +174,27 @@ app.MapGet("/v1/summary", async (HttpRequest req, IEventStore store, Cancellatio
 {
     var summary = await store.SummarizeAsync(new SpanQuery { TenantId = Tenant(req), Limit = int.MaxValue }, ct);
     return Results.Ok(summary);
+});
+
+// --- Phase 4: reconcile a tenant-day (estimated vs realized) + read the result ---
+// POST triggers a reconciliation for ?day=YYYY-MM-DD (defaults to today UTC),
+// pulling any configured billing connectors; GET returns the stored result.
+// In the zero-infra build with no connectors, ReconciledAgainstBilling is false
+// and the estimate stands — surfaced, not silently zeroed.
+app.MapPost("/v1/reconcile", async (HttpRequest req, string? day, IReconciler reconciler, TimeProvider clock, CancellationToken ct) =>
+{
+    var d = day is not null ? DateOnly.Parse(day, System.Globalization.CultureInfo.InvariantCulture)
+                            : DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime);
+    var result = await reconciler.ReconcileAsync(Tenant(req), d, ct);
+    return Results.Ok(result);
+});
+
+app.MapGet("/v1/reconcile", async (HttpRequest req, string? day, IReconciliationStore store, TimeProvider clock, CancellationToken ct) =>
+{
+    var d = day is not null ? DateOnly.Parse(day, System.Globalization.CultureInfo.InvariantCulture)
+                            : DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime);
+    var result = await store.GetAsync(Tenant(req), d, ct);
+    return result is null ? Results.NotFound() : Results.Ok(result);
 });
 
 app.Run();

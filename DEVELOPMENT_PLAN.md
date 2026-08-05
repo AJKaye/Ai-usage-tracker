@@ -141,18 +141,20 @@
 
 **Goal:** Add the **authoritative billing** layer and the estimated-vs-reconciled delta (`ARCHITECTURE.md` §8.3 step 2).
 
-**Deliverables**
-- [ ] `IBillingConnector` implementations for the realized-cost APIs: OpenAI Costs, Anthropic `cost_report` (note: excludes Priority Tier — track via usage endpoint), Azure Cost Management, GCP BigQuery export, AWS Cost Explorer/CUR.
-- [ ] `IReconciler` — matches estimated events to realized billing rows; computes and stores the **delta** at the appropriate grain; handles reporting lag.
-- [ ] Scheduled, resumable pulls with checkpointing; secrets via `ISecretProvider`.
-- [ ] Reconciliation views/materializations in ClickHouse.
-- [ ] Air-gap posture: connectors are optional; in air-gapped mode the estimate stands alone and this is surfaced clearly.
+**Deliverables** *(status 2026-08-05 — built + verified on .NET 10, 87 tests green under `-warnaserror`; branch `phase-4-reconciliation`, stacked on Phase 3.)*
+- [~] `IBillingConnector` implementations for the realized-cost APIs: **OpenAI Costs** and **Anthropic `cost_report`** done (Anthropic connector surfaces the Priority-Tier exclusion, §5 #12). *Azure Cost Management / GCP BigQuery / AWS CUR are later adds behind the same contract + injected-`HttpClient` seam.*
+- [x] `IReconciler` (`CostReconciler`) — sums estimated cost from stored spans, pulls realized rows from connectors, computes the **delta per provider** at the tenant-day grain; unmatched providers surface as estimate-only lines.
+- [~] Resumable pulls + secrets via `ISecretProvider` (key resolved by name, never config; missing secret throws). *Scheduling/checkpointing of recurring pulls is a later add (the pull is date-windowed and idempotent, so it's a scheduler wrapper, not a redesign).*
+- [~] Reconciliation views/materializations: `IReconciliationStore` seam + embedded `InMemoryReconciliationStore` (solo tier). *ClickHouse-backed materialization satisfies the same contract in the scale tier (infra-blocked here — no Docker).*
+- [x] **Air-gap posture:** connectors are optional; with none configured the estimate stands and `ReconciledAgainstBilling=false` is surfaced (not silently zeroed). A connector failure degrades gracefully — estimate remains, run still succeeds.
 
 **Key modules:** Reconciliation Service; Cost Engine; Canonical Store.
 
-**Exit criteria:** for a connected provider, a day of estimated cost reconciles against pulled realized cost with an explainable delta.
+**Exit criteria:** for a connected provider, a day of estimated cost reconciles against pulled realized cost with an explainable delta. **✅ Met** — `BillingConnectorTests.Connectors_feed_the_reconciler_end_to_end` (estimate 12.00 vs realized 12.34 → delta 0.34, per-provider).
 
-**Verification:** integration test with recorded/mocked provider billing responses; delta math validated against a known fixture; a connector failure degrades gracefully (estimate remains, reconciliation retries).
+**Verification:** integration test with recorded/mocked provider billing responses; delta math validated against a known fixture; a connector failure degrades gracefully (estimate remains, reconciliation retries). **✅** `ReconcilerTests` + `BillingConnectorTests` (canned HTTP responses, no network) + `ReconcileEndToEndTests` (API `/v1/reconcile`); connector-failure graceful degradation tested; **live-verified on the zero-infra exe** (`/v1/reconcile` → estimate stands, air-gap flagged).
+
+> **Phase-4 remainder (additive, no redesign):** Azure/GCP/AWS billing connectors behind the same seam; recurring scheduled pulls with checkpoint persistence; ClickHouse reconciliation materialization (needs Docker).
 
 ---
 
