@@ -27,5 +27,6 @@
     <ProjectReference Include="..\..\src\UsageTracker.Adapters.Reference\UsageTracker.Adapters.Reference.csproj" />
     <ProjectReference Include="..\..\src\UsageTracker.FinOps\UsageTracker.FinOps.csproj" />
     <ProjectReference Include="..\..\src\UsageTracker.Security\UsageTracker.Security.csproj" />
+    <ProjectReference Include="..\..\src\UsageTracker.Mcp\UsageTracker.Mcp.csproj" />
   </ItemGroup>
 </Project>

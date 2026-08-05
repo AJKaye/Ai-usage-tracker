@@ -3,6 +3,7 @@ using UsageTracker.Cost;
 using UsageTracker.Ingestion.Api;
 using UsageTracker.FinOps;
 using UsageTracker.Ingestion.Otlp;
+using UsageTracker.Mcp;
 using UsageTracker.Normalization;
 using UsageTracker.Reconciliation;
 using UsageTracker.Security;
@@ -79,6 +80,12 @@ builder.Services.AddSingleton<IReconciler>(sp => new CostReconciler(
 
 // --- Phase 6: FinOps serving (allocation / unit economics / FOCUS / scores) --
 builder.Services.AddSingleton<IScoreSink, InMemoryScoreSink>();
+
+// --- Phase 9: MCP server face (agents read their own spend via MCP) ----------
+// Thin adapter over the SAME IEventStore query surface — one more transport, not a
+// parallel data path. Exposed at POST /mcp as JSON-RPC 2.0.
+builder.Services.AddSingleton<IMcpUsageProvider>(sp => new McpUsageProvider(sp.GetRequiredService<IEventStore>()));
+builder.Services.AddSingleton(sp => new McpServer(sp.GetRequiredService<IMcpUsageProvider>()));
 
 // --- Phase 7: security platform services -------------------------------------
 // Tamper-evident audit sink (SOC 2 evidence) — always on.
@@ -163,10 +170,12 @@ app.Use(async (ctx, next) =>
 {
     var path = ctx.Request.Path;
     // Open paths: health, the governance matrix (public compliance disclosure), and
-    // anything that isn't a /v1 API call (i.e. SPA routes + static assets).
+    // anything that isn't a data API call (SPA routes + static assets). /v1 + /mcp
+    // are tenant-scoped data paths and go through the auth gate.
+    bool isDataPath = path.StartsWithSegments("/v1") || path.StartsWithSegments("/mcp");
     if (path.StartsWithSegments("/health")
         || path.StartsWithSegments("/v1/governance")
-        || !path.StartsWithSegments("/v1"))
+        || !isDataPath)
     {
         await next();
         return;
@@ -428,6 +437,16 @@ app.MapGet("/v1/governance", (IWebHostEnvironment env) =>
             StatusCounts = new Dictionary<string, int>(),
         });
     return Results.Ok(GovernanceParser.Parse(File.ReadAllText(path)));
+});
+
+// --- Phase 9: MCP server face (JSON-RPC 2.0) --------------------------------
+// An MCP client POSTs JSON-RPC here to read its own spend live (tools/resources).
+// Tenant-scoped like every data path; the server never trusts a client tenant.
+app.MapPost("/mcp", async (HttpRequest req, McpServer mcp, CancellationToken ct) =>
+{
+    using var doc = await System.Text.Json.JsonDocument.ParseAsync(req.Body, cancellationToken: ct);
+    var response = await mcp.HandleAsync(doc.RootElement, Tenant(req), ct);
+    return response is null ? Results.NoContent() : Results.Ok(response);   // null = JSON-RPC notification
 });
 
 // SPA fallback: any non-API, non-file route serves index.html so client-side routing

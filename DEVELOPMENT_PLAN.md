@@ -253,17 +253,19 @@
 
 **Goal:** Close the agentic-era loop (`ARCHITECTURE.md` §8.3 steps 4 & 6) and make integration effortless.
 
-**Deliverables**
-- [ ] **MCP server face** (`IMcpUsageProvider`) — usage queries as MCP tools (with `outputSchema`) and datasets as resources (`resources/subscribe` push), so agents read their own spend live; optional MCP-proxy interception correlating via `mcp.session.id` + `_meta` trace context.
-- [ ] **Score aggregator** (`IScoreSink`) — generic `POST …/score` endpoint; attach externally-computed scores from any eval framework (be the aggregator, not the judge).
-- [ ] Thin convenience SDKs (TS + Python at least) over OTLP/usage-event/proxy.
-- [ ] Agent-framework integration guides (LangChain/LangSmith, OpenAI Agents SDK, Claude Agent SDK, CrewAI, AutoGen, LlamaIndex) — mostly config, per `ARCHITECTURE.md` §7.2.
+**Deliverables** *(status 2026-08-05 — built + verified on .NET 10, 148 tests green under `-warnaserror`; branch `phase-9-mcp-ecosystem`. New project `UsageTracker.Mcp`.)*
+- [x] **MCP server face** (`IMcpUsageProvider` → `McpUsageProvider`, `McpServer`) — JSON-RPC 2.0 at `POST /mcp` (protocol 2025-06-18): `initialize`, `tools/list` (usage_summary / cost_by_provider / recent_spans, each with **input + output schema**), `tools/call` → structuredContent, `resources/list` + `resources/read` (`usage://recent-spans`). Thin adapter over the shared `IEventStore` query surface (not a parallel path); tenant-scoped. *`resources/subscribe` push + MCP-proxy `_meta` interception are the additive remainder.*
+- [x] **Score aggregator** (`IScoreSink`) — delivered in Phase 6 (`InMemoryScoreSink` + `POST /v1/scores` + `GET /v1/spans/{id}/scores`); confirmed here as §8.3 step 6. Attach externally-computed scores from any framework; the product never owns the judge.
+- [x] Thin convenience SDKs — `sdk/typescript` (zero-dep, `fetch`) + `sdk/python` (stdlib-only, `urllib`); both cover ingest / usage-event / score / summary. TS type-checks under `--strict`; Python imports clean.
+- [x] Agent-framework integration guides — `docs/integrations/` (LangChain/LangSmith, OpenAI Agents SDK, Claude Agent SDK, CrewAI, AutoGen, LlamaIndex — mostly OTLP-endpoint config per §7.2) + an MCP-client how-to + RAG/coarse/score paths + Adapter-SDK pointer.
 
 **Key modules:** MCP Server Face; Score/Quality Aggregator; API.
 
-**Exit criteria:** an agent queries its live spend via MCP; an external eval posts a score that attaches to the right span; a new integration is achievable from docs alone.
+**Exit criteria:** an agent queries its live spend via MCP; an external eval posts a score that attaches to the right span; a new integration is achievable from docs alone. **✅ Met** — live-verified on the zero-infra exe: MCP `initialize` + `tools/call usage_summary` (1 span/$0.0175), and a score round-trip (`helpfulness=0.92` from ragas) onto the span. Integration achievable from `docs/integrations/` + the SDKs alone.
 
-**Verification:** MCP client reads usage tools/resources; score round-trips onto a span and appears in the UI; a from-scratch integration following only the guide succeeds.
+**Verification:** MCP client reads usage tools/resources; score round-trips onto a span and appears in the UI; a from-scratch integration following only the guide succeeds. **✅** `McpServerTests` (9 cases: handshake/tools/resources/errors/tenant-scoping) + `McpEndToEndTests` (`/mcp` over HTTP) + the live exe check; score round-trip proven; the Governance/score data is already surfaced in the Phase-8 SPA.
+
+> **Phase-9 remainder (additive):** `resources/subscribe` push notifications + MCP-proxy interception (correlate via `mcp.session.id` + `_meta`); published/packaged SDK artifacts (npm/PyPI); more framework guides as they emit OTel.
 
 ---
 

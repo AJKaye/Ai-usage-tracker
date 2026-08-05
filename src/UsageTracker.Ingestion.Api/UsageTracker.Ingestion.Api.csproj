@@ -16,6 +16,7 @@
     <ProjectReference Include="..\UsageTracker.Reconciliation\UsageTracker.Reconciliation.csproj" />
     <ProjectReference Include="..\UsageTracker.FinOps\UsageTracker.FinOps.csproj" />
     <ProjectReference Include="..\UsageTracker.Security\UsageTracker.Security.csproj" />
+    <ProjectReference Include="..\UsageTracker.Mcp\UsageTracker.Mcp.csproj" />
   </ItemGroup>
 
   <!-- Ship GOVERNANCE.md next to the exe so /v1/governance parses it at runtime

@@ -10,6 +10,7 @@
     <Project Path="src/UsageTracker.Ingestion.Api/UsageTracker.Ingestion.Api.csproj" />
     <Project Path="src/UsageTracker.Ingestion.Otlp/UsageTracker.Ingestion.Otlp.csproj" />
     <Project Path="src/UsageTracker.Ingestion.Proxy/UsageTracker.Ingestion.Proxy.csproj" />
+    <Project Path="src/UsageTracker.Mcp/UsageTracker.Mcp.csproj" />
     <Project Path="src/UsageTracker.Normalization/UsageTracker.Normalization.csproj" />
     <Project Path="src/UsageTracker.Plugins/UsageTracker.Plugins.csproj" />
     <Project Path="src/UsageTracker.Reconciliation/UsageTracker.Reconciliation.csproj" />
