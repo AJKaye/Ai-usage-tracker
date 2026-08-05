@@ -20,16 +20,21 @@ public sealed class OpenAiBillingConnector : IBillingConnector
 {
     private readonly HttpClient _http;
     private readonly ISecretProvider _secrets;
-    private readonly string _secretName;
+    private readonly string _secretNameTemplate;
     public string Provider => "openai";
 
-    public OpenAiBillingConnector(HttpClient http, ISecretProvider secrets, string secretName = "openai.admin_key")
-        => (_http, _secrets, _secretName) = (http, secrets, secretName);
+    // The secret name is a TEMPLATE that may contain "{tenant}", so pooled SaaS
+    // resolves each tenant's OWN billing credential (no cross-tenant realized-cost
+    // bleed). Self-host uses a literal name (tenant count = 1). Default is
+    // tenant-scoped; pass a literal name for self-host if preferred.
+    public OpenAiBillingConnector(HttpClient http, ISecretProvider secrets, string secretNameTemplate = "openai.admin_key.{tenant}")
+        => (_http, _secrets, _secretNameTemplate) = (http, secrets, secretNameTemplate);
 
     public async Task<IReadOnlyList<RealizedCost>> PullAsync(string tenantId, DateOnly from, DateOnly to, CancellationToken ct = default)
     {
-        var key = await _secrets.GetAsync(_secretName, ct)
-            ?? throw new InvalidOperationException($"secret '{_secretName}' not resolved — cannot pull OpenAI costs.");
+        var secretName = _secretNameTemplate.Replace("{tenant}", tenantId);
+        var key = await _secrets.GetAsync(secretName, ct)
+            ?? throw new InvalidOperationException($"secret '{secretName}' not resolved — cannot pull OpenAI costs for tenant '{tenantId}'.");
 
         long start = ToUnix(from);
         long end = ToUnix(to.AddDays(1));   // exclusive end of the last day
@@ -91,19 +96,21 @@ public sealed class AnthropicBillingConnector : IBillingConnector
 {
     private readonly HttpClient _http;
     private readonly ISecretProvider _secrets;
-    private readonly string _secretName;
+    private readonly string _secretNameTemplate;
     public string Provider => "anthropic";
 
     /// <summary>cost_report omits Priority Tier — a documented understatement risk.</summary>
     public bool ExcludesPriorityTier => true;
 
-    public AnthropicBillingConnector(HttpClient http, ISecretProvider secrets, string secretName = "anthropic.admin_key")
-        => (_http, _secrets, _secretName) = (http, secrets, secretName);
+    // Tenant-scoped secret template ("{tenant}" placeholder) — see OpenAiBillingConnector.
+    public AnthropicBillingConnector(HttpClient http, ISecretProvider secrets, string secretNameTemplate = "anthropic.admin_key.{tenant}")
+        => (_http, _secrets, _secretNameTemplate) = (http, secrets, secretNameTemplate);
 
     public async Task<IReadOnlyList<RealizedCost>> PullAsync(string tenantId, DateOnly from, DateOnly to, CancellationToken ct = default)
     {
-        var key = await _secrets.GetAsync(_secretName, ct)
-            ?? throw new InvalidOperationException($"secret '{_secretName}' not resolved — cannot pull Anthropic cost_report.");
+        var secretName = _secretNameTemplate.Replace("{tenant}", tenantId);
+        var key = await _secrets.GetAsync(secretName, ct)
+            ?? throw new InvalidOperationException($"secret '{secretName}' not resolved — cannot pull Anthropic cost_report for tenant '{tenantId}'.");
 
         using var req = new HttpRequestMessage(HttpMethod.Get,
             $"/v1/organizations/cost_report?starting_at={from:yyyy-MM-dd}&ending_at={to.AddDays(1):yyyy-MM-dd}");

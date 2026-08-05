@@ -4,7 +4,7 @@
 >
 > **This is a design-time control register, not a compliance attestation.** No framework is certified; certification requires an audit against a running system. Status legend below is deliberately conservative.
 
-**Last updated:** 2026-08-04 · **Overall posture:** Foundations (Phase 0). Almost everything is **Designed**; the vertical slice implements a first few controls. Do not represent any row as "certified."
+**Last updated:** 2026-08-05 · **Overall posture:** Through Phase 7. The **app-layer** security controls (identity, RBAC/ABAC, tenant isolation, tamper-evident audit, crypto-shredding, secrets-by-name, air-gap egress) are Implemented/Verified with tests. **DB-enforced isolation (Postgres RLS / ClickHouse row policies), transport security (mTLS/TLS 1.3), KMS/FIPS, and CI supply-chain scans remain infra-blocked** and are Designed. Do not represent any row as "certified."
 
 ## Status legend
 
@@ -24,18 +24,18 @@ These controls satisfy requirements shared across SOC 2 / GDPR / HIPAA / FedRAMP
 
 | ID | Control | Module / mechanism (§5) | Status | Evidence / notes |
 |----|---------|--------------------------|--------|------------------|
-| C-IDENT | Authn via OIDC/SAML SSO → `Principal` | `IIdentityProvider` | Scaffolded | Contract authored (`Platform.cs`); no IdP wired |
-| C-AUTHZ | RBAC + ABAC, tenant/workspace/role scoped | `Principal.Roles/Scopes` + middleware | Designed | Enforced in Phase 7 |
-| C-TENANT | Tenant isolation on every read/write | `ITenantResolver` + Postgres RLS / CH row policies | **Verified (slice)** | In-memory store enforces per-tenant reads; `EventStoreContractTests` asserts no cross-tenant read. Production RLS = Phase 7 |
-| C-MTLS | Zero-trust service-to-service mTLS | deployment mesh | Designed | Phase 7 |
-| C-ENC-TRANSIT | TLS 1.3 in transit | ingress / mesh | Designed | Phase 7/10 |
-| C-ENC-REST | AES-256 at rest; envelope encryption via KMS/Vault | storage layer + `ISecretProvider` | Designed | Phase 1/7 |
-| C-SECRETS | No secrets in config/code/images — resolved by name | `ISecretProvider` | Scaffolded | Contract authored; `.gitignore` excludes `.env`/secrets |
-| C-AUDIT | Immutable, tamper-evident audit of access + admin actions | `IAuditSink` | Scaffolded | Contract authored (`Platform.cs`); append-only impl = Phase 7 |
-| C-SUPPLY | Supply-chain: SBOM, dependency + secret scanning, signed images | CI (`.github/workflows/ci.yml`) | Designed | CI builds+tests today; SBOM/scan/sign added Phase 0 completion |
-| C-RETAIN | Configurable retention per tenant/region | ClickHouse partitioning | Designed | Phase 7 |
-| C-RESIDENCY | Data residency per tenant/region | deployment topology + storage routing | Designed | Phase 7/10 |
-| C-DELETE | Right-to-delete over append-only store via crypto-shredding | per-subject data keys | Designed | Phase 7 — destroy the subject key; aggregates persist |
+| C-IDENT | Authn via OIDC/SAML SSO → `Principal` | `IIdentityProvider` | **Verified (API-key)** | `ApiKeyIdentityProvider` (hashed keys, constant-time match) + auth middleware; tested + live-verified on the exe. OIDC/SAML validator swaps in behind the same contract |
+| C-AUTHZ | RBAC + ABAC, tenant/workspace/role scoped | `Authorizer` + middleware | **Implemented** | `Authorizer` (roles/admin-superset, tenant-match, scopes) built + tested; per-endpoint filter is remaining wiring |
+| C-TENANT | Tenant isolation on every read/write | `PrincipalTenantResolver` + Postgres RLS / CH row policies | **Verified (app-layer)** | Tenant from verified principal (not header); stores contract-tested for no cross-tenant read; auth E2E proves header-spoof rejected. **DB-enforced RLS/row-policies infra-blocked** |
+| C-MTLS | Zero-trust service-to-service mTLS | deployment mesh | Designed | Infra-blocked (needs a cluster) |
+| C-ENC-TRANSIT | TLS 1.3 in transit | ingress / mesh | Designed | Deployment concern (Phase 10) |
+| C-ENC-REST | AES-256 at rest; envelope encryption via KMS/Vault | `SubjectKeyVault` + storage | **Implemented (content)** | Per-subject AES-256-GCM sealing built + tested; disk-level at-rest + KMS-wrapped DEK is infra |
+| C-SECRETS | No secrets in config/code/images — resolved by name | `ISecretProvider` | **Verified** | Connectors resolve keys by tenant-scoped name, throw if missing; no hardcoded secrets (audited Phase 0–5); `.gitignore` excludes `.env` |
+| C-AUDIT | Immutable, tamper-evident audit of access + admin actions | `HashChainAuditSink` | **Implemented** | Hash-chain sink built + tested (detects mutation/reorder), exportable evidence. Emission on **every** path is remaining wiring |
+| C-SUPPLY | Supply-chain: SBOM, dependency + secret scanning, signed images | CI (`.github/workflows/ci.yml`) | Scaffolded | `-warnaserror` + NuGet vuln audit present (caught a real CVE); SBOM/scan/sign still to add |
+| C-RETAIN | Configurable retention per tenant/region | `DataLifecyclePolicy` | **Implemented (policy)** | Retention window + `IsExpired` built + tested; purge job over a server store is infra |
+| C-RESIDENCY | Data residency per tenant/region | `DataLifecyclePolicy.AllowsRegion` | **Implemented (policy)** | Residency guard built + tested; storage routing is deployment topology |
+| C-DELETE | Right-to-delete over append-only store via crypto-shredding | `SubjectKeyVault` per-subject data keys | **Verified** | `CryptoShred` destroys the key → content unrecoverable while aggregates persist; tested |
 | C-CONTENT | Prompt/response capture is opt-in + field-level encrypted + PII-classified | canonical model (content held separately) | **Implemented (slice)** | Canonical `Span` deliberately excludes content; capture is a separate opt-in path |
 
 ---

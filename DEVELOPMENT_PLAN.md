@@ -205,21 +205,25 @@
 
 **Goal:** Elevate the shift-left security work into the full **D6** posture. (Security has been present since Phase 0; this phase closes the compliance gaps and proves them.)
 
-**Deliverables**
-- [ ] **Multi-tenancy** enforced end-to-end: Postgres RLS + ClickHouse row policies verified on every read path; tenant context flows through all services.
-- [ ] **Identity:** OIDC/SAML SSO, SCIM provisioning, RBAC+ABAC via `IIdentityProvider`.
-- [ ] **Zero-trust:** service-to-service mTLS; least-privilege service accounts.
-- [ ] **Encryption:** TLS 1.3 everywhere; AES-256 at rest; envelope encryption via KMS/Vault; **FIPS mode** toggle (FedRAMP); **per-subject data keys**.
-- [ ] **Audit:** immutable, tamper-evident `IAuditSink` across all admin/data access; exportable evidence.
-- [ ] **Data lifecycle:** field-level encryption for opt-in captured content; configurable retention/redaction/residency per tenant/region; **right-to-delete via crypto-shredding** on ClickHouse partitions (GDPR/HIPAA).
-- [ ] **Air-gap validation:** full offline run with signed offline pricing bundle; assert zero outbound calls on critical paths.
-- [ ] Threat model → v1; penetration-test readiness checklist; update `GOVERNANCE.md` to "implemented" per control.
+**Deliverables** *(status 2026-08-05 — built + verified on .NET 10, 135 tests green under `-warnaserror`; branch `phase-7-security`, stacked on Phase 6. New project `UsageTracker.Security`.)*
+- [~] **Multi-tenancy** — **enforced at the app layer end-to-end**: tenant derives from the verified `Principal` (not a header), threaded through every store/reconciler/serving path, contract-tested for no cross-tenant read, and now enforced by API auth middleware. *Postgres RLS + ClickHouse row policies (DB-enforced isolation) remain infra-blocked (no Docker) — the app-layer scoping is the belt; RLS is the braces.*
+- [~] **Identity:** `ApiKeyIdentityProvider` (hashed keys, constant-time match) + `PrincipalTenantResolver` + RBAC/ABAC (`Authorizer`: roles/admin-superset, tenant-match, scopes). This is the OIDC/SAML seam — a JWT/SAML validator swaps in behind `IIdentityProvider`. *Full OIDC/SAML SSO + SCIM provisioning are the additive remainder.*
+- [ ] **Zero-trust:** service-to-service mTLS; least-privilege service accounts. *Infra-blocked (needs a cluster) — designed, not built.*
+- [~] **Encryption:** **per-subject AES-256-GCM data keys** (`SubjectKeyVault`) for opt-in content — the crypto-shredding core. *TLS 1.3 termination, at-rest disk encryption, KMS/Vault-wrapped DEKs (envelope), and FIPS-mode toggle are deployment/infra concerns, designed not built here.*
+- [~] **Audit:** **tamper-evident `HashChainAuditSink`** (hash chain, `Verify` detects mutation/reorder, tenant-scoped, exportable evidence) — built + tested. *Emitting `RecordAsync` on **every** admin/data path is the remaining wiring (sink is ready).*
+- [x] **Data lifecycle:** per-subject **crypto-shredding** right-to-delete (destroy the key → content unrecoverable, aggregates persist); `DataLifecyclePolicy` (retention window + residency guard + content-capture opt-in, off by default). *ClickHouse-partition crypto-shred is the same mechanism at the scale tier.*
+- [x] **Air-gap validation:** `EgressPolicy` fails closed in solo/ephemeral (a critical-path outbound call throws); the signed offline pricing bundle is now **enforced when `USAGETRACKER__PRICING_*` is configured** (verified before load; tampered → refused). Zero-egress asserted by test.
+- [x] Threat model → **v1** (`docs/THREAT_MODEL.md`, per-boundary STRIDE with honest status); `GOVERNANCE.md` updated per control. Pen-test readiness checklist is part of Phase 10.
+
+> **Also closed here — review pre-deployment findings:** (#1) signed pricing bundle is now enforced by config; (#2) billing connectors resolve a **tenant-scoped** secret (no pooled-SaaS realized-cost bleed); (#3) tenant no longer comes from an unauthenticated header. (#5) A content-non-persistence guard is covered by the `EstimationText` `[JsonIgnore]` + the store round-trip.
 
 **Key modules:** all Platform services; cross-cutting middleware.
 
-**Exit criteria:** each of the four frameworks' controls in `GOVERNANCE.md` maps to an implemented, tested control; a cross-tenant access attempt is provably impossible; an air-gapped deployment functions with no network egress.
+**Exit criteria:** each of the four frameworks' controls in `GOVERNANCE.md` maps to an implemented, tested control; a cross-tenant access attempt is provably impossible; an air-gapped deployment functions with no network egress. **✅ Met at the app layer** — cross-tenant access is provably rejected (`SecurityIntegrationTests`: key-scoped tenant, header spoof ignored, 401 on bad credential); air-gap egress fails closed (`EgressPolicyTests`). *DB-enforced isolation (RLS) + scan-clean bars are infra-blocked and tracked in the threat model.*
 
-**Verification:** automated tenancy-isolation test battery; crypto-shred a subject and confirm their content is unrecoverable while aggregates persist; static/dynamic security scans clean; air-gap smoke test passes with egress firewalled.
+**Verification:** automated tenancy-isolation test battery; crypto-shred a subject and confirm their content is unrecoverable while aggregates persist; static/dynamic security scans clean; air-gap smoke test passes with egress firewalled. **✅** `IdentityTests`, `AuditAndShreddingTests` (crypto-shred → content null, aggregate survives), `SecurityIntegrationTests` (auth E2E, live-verified on the exe: bad key 401, valid key scoped to its tenant), `EgressPolicyTests`. **Static/dynamic scans + firewalled air-gap smoke test are infra/CI remainder.**
+
+> **Phase-7 remainder (infra-blocked or additive):** Postgres RLS + ClickHouse row policies; mTLS + TLS 1.3 + KMS-wrapped DEKs + FIPS; OIDC/SAML SSO + SCIM; audit emission on every path + per-endpoint RBAC filter + per-tenant rate limiting; SBOM/scan/signing in CI; third-party pen test (Phase 10).
 
 ---
 

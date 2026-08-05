@@ -5,6 +5,7 @@ using UsageTracker.FinOps;
 using UsageTracker.Ingestion.Otlp;
 using UsageTracker.Normalization;
 using UsageTracker.Reconciliation;
+using UsageTracker.Security;
 using UsageTracker.Storage.InMemory;
 using UsageTracker.Storage.Sqlite;
 
@@ -21,7 +22,33 @@ var profile = (Environment.GetEnvironmentVariable("USAGETRACKER__PROFILE")
 // --- composition root: wire the replaceable modules behind their contracts ---
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton(TokenNormalizerRegistry.CreateDefault());
-builder.Services.AddSingleton<IPriceCatalogSource>(_ => OfflineBundleCatalogSource.Seed());
+
+// Air-gap egress policy (D6): solo/ephemeral fail-closed on any outbound call.
+var egress = EgressPolicy.ForProfile(profile);
+builder.Services.AddSingleton(egress);
+
+// Pricing catalog source. Review finding #1: if a signing public key + bundle are
+// configured (USAGETRACKER__PRICING_BUNDLE / __PRICING_BUNDLE_SIG / __PRICING_PUBKEY),
+// the bundle's ECDSA signature is VERIFIED before load and a tampered bundle is
+// refused (D6/FedRAMP integrity). Absent that config, the unsigned dev seed is used
+// and clearly logged as dev-only.
+builder.Services.AddSingleton<IPriceCatalogSource>(sp =>
+{
+    var bundlePath = Environment.GetEnvironmentVariable("USAGETRACKER__PRICING_BUNDLE");
+    var sigPath = Environment.GetEnvironmentVariable("USAGETRACKER__PRICING_BUNDLE_SIG");
+    var pubKeyPath = Environment.GetEnvironmentVariable("USAGETRACKER__PRICING_PUBKEY");
+    var log = sp.GetRequiredService<ILoggerFactory>().CreateLogger("pricing");
+    if (bundlePath is not null && sigPath is not null && pubKeyPath is not null)
+    {
+        var verifier = EcdsaBundleVerifier.FromSpki(File.ReadAllBytes(pubKeyPath));
+        var source = new SignedOfflineBundleSource(
+            File.ReadAllBytes(bundlePath), File.ReadAllBytes(sigPath), verifier);
+        log.LogInformation("pricing catalog: signed offline bundle verified (digest {Digest}).", source.Digest);
+        return source;
+    }
+    log.LogWarning("pricing catalog: using the UNSIGNED dev seed — configure USAGETRACKER__PRICING_BUNDLE/_SIG/_PUBKEY for a signature-verified bundle (D6/air-gap).");
+    return OfflineBundleCatalogSource.Seed();
+});
 builder.Services.AddSingleton<IPriceCatalog>(sp => new PriceCatalog(sp.GetRequiredService<IPriceCatalogSource>()));
 builder.Services.AddSingleton<ICostEngine>(sp => TieredCostEngine.CreateDefault(
     sp.GetRequiredService<IPriceCatalog>(), sp.GetRequiredService<TimeProvider>()));
@@ -44,6 +71,37 @@ builder.Services.AddSingleton<IReconciler>(sp => new CostReconciler(
 
 // --- Phase 6: FinOps serving (allocation / unit economics / FOCUS / scores) --
 builder.Services.AddSingleton<IScoreSink, InMemoryScoreSink>();
+
+// --- Phase 7: security platform services -------------------------------------
+// Tamper-evident audit sink (SOC 2 evidence) — always on.
+builder.Services.AddSingleton<HashChainAuditSink>();
+builder.Services.AddSingleton<IAuditSink>(sp => sp.GetRequiredService<HashChainAuditSink>());
+builder.Services.AddSingleton<ITenantResolver, PrincipalTenantResolver>();
+// Subject key vault for opt-in content sealing + crypto-shredding (right-to-delete).
+builder.Services.AddSingleton<SubjectKeyVault>();
+// Identity provider: API keys resolved from config (USAGETRACKER__APIKEYS = "key:tenant:role,...").
+// Absent config → no keys registered → the dev header path (below) is used.
+builder.Services.AddSingleton<IIdentityProvider>(_ =>
+{
+    // Read from configuration first (test/host-scoped, no process-global leakage),
+    // then the env var as a deployment convenience.
+    var spec = builder.Configuration["ApiKeys"]
+        ?? Environment.GetEnvironmentVariable("USAGETRACKER__APIKEYS");
+    var bindings = new Dictionary<string, ApiKeyBinding>();
+    if (!string.IsNullOrWhiteSpace(spec))
+        foreach (var entry in spec.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var parts = entry.Split(':');
+            if (parts.Length >= 2)
+                bindings[parts[0]] = new ApiKeyBinding
+                {
+                    TenantId = parts[1],
+                    SubjectId = parts.Length > 3 ? parts[3] : $"key:{parts[1]}",
+                    Roles = parts.Length > 2 ? new[] { parts[2] } : Array.Empty<string>(),
+                };
+        }
+    return new ApiKeyIdentityProvider(bindings);
+});
 
 // The ONLY line that changes per deployment tier — every profile satisfies IEventStore.
 builder.Services.AddSingleton<IEventStore>(_ => profile switch
@@ -82,10 +140,51 @@ var app = builder.Build();
 
 app.Logger.LogInformation("AI Usage Tracker starting — profile='{Profile}'", profile);
 
-// --- tenant resolution (slice: a header; real system: OIDC/mTLS + ITenantResolver) ---
+// --- Phase 7: auth + tenant-scoping middleware -------------------------------
+// Runs once per request: /health is open; everything else authenticates (if a
+// credential is presented) and resolves the tenant from the verified principal.
+// A presented-but-invalid credential → 401. Keyless dev falls back to X-Tenant-Id.
+app.Use(async (ctx, next) =>
+{
+    if (ctx.Request.Path.StartsWithSegments("/health"))
+    {
+        await next();
+        return;
+    }
+
+    var idp = ctx.RequestServices.GetRequiredService<IIdentityProvider>();
+    var resolver = ctx.RequestServices.GetRequiredService<ITenantResolver>();
+    var headers = ctx.Request.Headers.ToDictionary(h => h.Key, h => h.Value.ToString(), StringComparer.OrdinalIgnoreCase);
+
+    var principal = await idp.AuthenticateAsync(headers);
+    if (principal is not null)
+    {
+        ctx.Items["tenant"] = resolver.Resolve(headers, principal);
+        ctx.Items["principal"] = principal;
+    }
+    else if (ApiKeyIdentityProvider.ExtractCredential(headers) is not null)
+    {
+        // A credential was presented but did not authenticate → fail closed.
+        ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
+        await ctx.Response.WriteAsJsonAsync(new { error = "invalid credential" });
+        return;
+    }
+    else
+    {
+        // Keyless dev posture: header-scoped (or "default").
+        ctx.Items["tenant"] = ctx.Request.Headers.TryGetValue("X-Tenant-Id", out var v) && !string.IsNullOrWhiteSpace(v)
+            ? v.ToString() : "default";
+    }
+    await next();
+});
+
+// --- tenant resolution (Phase 7) ---
+// The auth MIDDLEWARE (below) resolves the tenant once per request and stashes it in
+// HttpContext.Items; endpoints read it synchronously here. If API keys are configured
+// a request MUST authenticate and its tenant comes from the verified Principal (a
+// client cannot assert an arbitrary tenant); keyless dev falls back to X-Tenant-Id.
 static string Tenant(HttpRequest r) =>
-    r.Headers.TryGetValue("X-Tenant-Id", out var v) && !string.IsNullOrWhiteSpace(v)
-        ? v.ToString() : "default";
+    r.HttpContext.Items.TryGetValue("tenant", out var t) && t is string s ? s : "default";
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "ingestion-api", version = "0.1.0" }));
 
