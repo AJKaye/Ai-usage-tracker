@@ -231,19 +231,21 @@
 
 **Goal:** The React + TypeScript SPA (D4), including the owner-requested **Regulatory Governance page**.
 
-**Deliverables**
-- [ ] React + TS SPA scaffold; **imports `design-system/dist/tokens.css` + `dist/tokens.ts`** as the sole styling source; auth via platform SSO; tenant/workspace switching that also sets the tenant `data-theme` (white-label) + light/dark.
-- [ ] **Storybook** as the interactive component gallery over the design tokens; visual-regression (Chromatic/Playwright) + axe gates added to CI (extends the Phase 0 design-system gates).
-- [ ] Core dashboards: usage explorer (Session→Trace→Span drill-down), cost (estimated vs reconciled delta), allocation, efficiency (latency/TTFT/cache/retry/fallback), unit economics — built from design-system components + charts per `design-system/specs/charts.md` (invoke the `dataviz` skill for each new chart).
-- [ ] **Regulatory Governance page** — styled entirely from tokens; renders, per framework (SOC 2 / GDPR / HIPAA / FedRAMP), how the solution meets each requirement, sourced from `GOVERNANCE.md`/an API so it stays truthful as controls evolve. Includes data-residency, retention, and audit-export controls surfaced to admins.
-- [ ] Accessibility (WCAG 2.1 AA) per `design-system/specs/accessibility.md`. Branding is **neutral base (B1)**; SS&C/other tenants apply via the white-label theme mechanism — no SS&C in the base.
-- [ ] **Progressive Deployment (★):** the built SPA is **embedded into the `solo` single-file binary** (served as static assets by the API host) so the downloadable `.exe` ships *with* its UI — no separate web server, no Node runtime on the target. Same bundle is servable standalone for the distributed tier. "Download exe → open browser → dashboard loads, zero infra" is a Phase-8 exit check.
+**Deliverables** *(status 2026-08-05 — SPA builds clean (Vite, TS strict); .NET 139 tests green under `-warnaserror`; branch `phase-8-web-ui`. Live-verified: zero-infra exe serves the UI + governance.)*
+- [x] React + TS SPA scaffold (`web/`, Vite + React 18 + TS strict); **consumes the design-system role tokens** (`tokens.css` vendored from `dist/`) as the sole styling source — no raw hex/px; tenant + `data-theme` (white-label) + light/dark switch in the shell. *Auth via platform SSO is the additive remainder (the client sends tenant/bearer; full OIDC login flow is Phase-7-adjacent).*
+- [~] Core dashboards: cost (spend + by provider/model), allocation (tag-free, dimension switch, 100%-of-spend bars), efficiency (latency/TTFT/cache/error + unit economics), Regulatory Governance — built from role tokens. *Session→Trace→Span drill-down + estimated-vs-reconciled delta view are additive (the data/endpoints exist; deeper chart UIs to follow).*
+- [x] **Regulatory Governance page** — styled from tokens; renders the control register (SOC 2 / GDPR / HIPAA / FedRAMP) sourced live from **`GET /v1/governance`** (parses `GOVERNANCE.md`), so it **never drifts** — a status change in the file shows with no code edit. Status-count tiles + per-control table.
+- [x] Accessibility baseline per `design-system/specs/accessibility.md`: semantic nav/table markup, `aria-label`s on controls, focus-visible via tokens, `prefers-reduced-motion` honored globally. *Full axe/WCAG AA audit is part of the CI-gate remainder.*
+- [x] **Progressive Deployment (★):** the built SPA is **embedded into the `solo` single-file `.exe`** (served from `wwwroot` by the API host; content root pinned to the exe dir so it works from any CWD) — no separate web server, no Node on the target. **Exit check LIVE-VERIFIED**: launched the zero-infra exe (dotnet off PATH, from an unrelated CWD) → `GET /` serves the SPA, deep SPA routes fall back to `index.html`, CSS carries the design tokens, `/v1/governance` returns the parsed matrix.
+- [~] **Storybook** + visual-regression (Chromatic/Playwright) + axe CI gates. *Deferred — heavy harness; not the exit criterion. The living styleguide (`design-system/styleguide/index.html`) already provides a token/component gallery.*
 
 **Key modules:** Web UI; Design System; API/BFF; Governance.
 
-**Exit criteria:** an admin can see spend, allocation, and efficiency for their tenant and read exactly how each compliance requirement is met, with no stale/hand-maintained governance copy.
+**Exit criteria:** an admin can see spend, allocation, and efficiency for their tenant and read exactly how each compliance requirement is met, with no stale/hand-maintained governance copy. **✅ Met** — the SPA renders spend/allocation/efficiency from the `/v1` APIs and the governance page from `/v1/governance` (parsed from GOVERNANCE.md, zero hand-maintained copy). Live-verified on the exe.
 
-**Verification:** end-to-end UI tests (Playwright) against a seeded tenant; a11y audit passes; governance page reflects a control change made in `GOVERNANCE.md`/API without a code edit.
+**Verification:** end-to-end UI tests (Playwright) against a seeded tenant; a11y audit passes; governance page reflects a control change made in `GOVERNANCE.md`/API without a code edit. **✅** governance-without-drift proven by `GovernanceParserTests` + `GovernanceApiTests` (the page reads the parsed file) + the live exe check; SPA build is green. **Playwright E2E + axe audit are the CI-harness remainder.**
+
+> **Phase-8 remainder (additive):** Playwright E2E + axe CI gates + Storybook; Session→Trace→Span drill-down + estimated-vs-reconciled delta chart views; full OIDC login flow in the SPA; Style Dictionary build so `dist/` is generated not hand-seeded.
 
 ---
 

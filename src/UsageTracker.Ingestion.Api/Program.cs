@@ -9,7 +9,15 @@ using UsageTracker.Security;
 using UsageTracker.Storage.InMemory;
 using UsageTracker.Storage.Sqlite;
 
-var builder = WebApplication.CreateBuilder(args);
+// Pin the content root to the EXE's directory (not the launch CWD) so the embedded
+// wwwroot + GOVERNANCE.md resolve wherever the .exe is double-clicked from — the
+// Progressive Deployment ★ promise ("download, run anywhere"). Single-file publish
+// extracts here too.
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    ContentRootPath = AppContext.BaseDirectory,
+});
 
 // --- DEPLOYMENT PROFILE (the "runs anywhere" knob) -------------------------
 // USAGETRACKER__PROFILE selects the backend tier. Default is "solo": an embedded
@@ -140,13 +148,25 @@ var app = builder.Build();
 
 app.Logger.LogInformation("AI Usage Tracker starting — profile='{Profile}'", profile);
 
+// --- Phase 8: serve the embedded SPA (the exe ships WITH its UI) -------------
+// Static assets + index.html live in wwwroot (the built React bundle, copied at
+// publish). These are public (the SPA authenticates its own API calls), so static
+// serving runs BEFORE the auth gate.
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 // --- Phase 7: auth + tenant-scoping middleware -------------------------------
-// Runs once per request: /health is open; everything else authenticates (if a
-// credential is presented) and resolves the tenant from the verified principal.
-// A presented-but-invalid credential → 401. Keyless dev falls back to X-Tenant-Id.
+// Runs once per request: /health + the SPA/static + governance read are open;
+// every /v1 data call authenticates (if a credential is presented) and resolves the
+// tenant from the verified principal. Invalid credential → 401. Keyless dev → header.
 app.Use(async (ctx, next) =>
 {
-    if (ctx.Request.Path.StartsWithSegments("/health"))
+    var path = ctx.Request.Path;
+    // Open paths: health, the governance matrix (public compliance disclosure), and
+    // anything that isn't a /v1 API call (i.e. SPA routes + static assets).
+    if (path.StartsWithSegments("/health")
+        || path.StartsWithSegments("/v1/governance")
+        || !path.StartsWithSegments("/v1"))
     {
         await next();
         return;
@@ -386,6 +406,33 @@ app.MapPost("/v1/scores", async (HttpRequest req, ScoreDto dto, IScoreSink sink,
 
 app.MapGet("/v1/spans/{spanId}/scores", async (HttpRequest req, string spanId, IScoreSink sink, CancellationToken ct) =>
     Results.Ok(await sink.GetForSpanAsync(Tenant(req), spanId, ct)));
+
+// --- Phase 8: Regulatory Governance matrix (backs the in-product governance page) ---
+// Parsed live from GOVERNANCE.md so the page never drifts from the maintained source.
+// Public (compliance disclosure). GOVERNANCE.md is copied next to the exe at publish;
+// falls back to the content root / repo root in dev.
+app.MapGet("/v1/governance", (IWebHostEnvironment env) =>
+{
+    string[] candidates =
+    {
+        Path.Combine(AppContext.BaseDirectory, "GOVERNANCE.md"),
+        Path.Combine(env.ContentRootPath, "GOVERNANCE.md"),
+        Path.Combine(env.ContentRootPath, "..", "..", "GOVERNANCE.md"),
+    };
+    var path = candidates.FirstOrDefault(File.Exists);
+    if (path is null)
+        return Results.Ok(new GovernanceMatrix
+        {
+            Controls = Array.Empty<GovernanceControl>(),
+            LastUpdated = "unavailable",
+            StatusCounts = new Dictionary<string, int>(),
+        });
+    return Results.Ok(GovernanceParser.Parse(File.ReadAllText(path)));
+});
+
+// SPA fallback: any non-API, non-file route serves index.html so client-side routing
+// works (deep links to /dashboard, /governance, …). No-op if no SPA bundle is present.
+app.MapFallbackToFile("index.html");
 
 app.Run();
 

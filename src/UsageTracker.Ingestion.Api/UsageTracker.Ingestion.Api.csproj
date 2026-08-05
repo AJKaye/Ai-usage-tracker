@@ -17,4 +17,11 @@
     <ProjectReference Include="..\UsageTracker.FinOps\UsageTracker.FinOps.csproj" />
     <ProjectReference Include="..\UsageTracker.Security\UsageTracker.Security.csproj" />
   </ItemGroup>
+
+  <!-- Ship GOVERNANCE.md next to the exe so /v1/governance parses it at runtime
+       (the Regulatory Governance page is sourced from it, never a hand-maintained
+       copy). Copied to output + published. -->
+  <ItemGroup>
+    <None Include="..\..\GOVERNANCE.md" Link="GOVERNANCE.md" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

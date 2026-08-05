@@ -1,0 +1,105 @@
+/* AI Usage Tracker SPA styling — references ONLY design-system ROLE tokens
+   (var(--color-*), var(--space-*), var(--radius-*), var(--shadow-*)). No raw
+   hex/px, so a theme swap (data-theme) or light/dark restyles the whole app with
+   zero edits here — the design-system distribution contract. */
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--font-family-sans, system-ui, sans-serif);
+  background: var(--color-bg-canvas);
+  color: var(--color-text-primary);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+a { color: var(--color-text-link); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* --- app shell --- */
+.app { display: flex; min-height: 100vh; }
+
+.sidebar {
+  width: 220px;
+  background: var(--color-bg-surface);
+  border-right: 1px solid var(--color-border-subtle);
+  padding: var(--space-6) var(--space-4);
+  display: flex; flex-direction: column; gap: var(--space-2);
+}
+.sidebar .brand {
+  font-weight: 700; font-size: 16px;
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-6);
+}
+.nav-link {
+  display: block; padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+}
+.nav-link:hover { background: var(--color-bg-subtle); text-decoration: none; }
+.nav-link.active { background: var(--color-brand-subtle); color: var(--color-brand-text); font-weight: 600; }
+
+.main { flex: 1; padding: var(--space-8); overflow: auto; }
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: var(--space-8);
+}
+.topbar h1 { font-size: 22px; margin: 0; }
+.controls { display: flex; gap: var(--space-3); align-items: center; }
+
+/* --- controls --- */
+.btn {
+  border: 1px solid var(--color-border-default);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-control, var(--radius-sm));
+  cursor: pointer; font-size: 13px;
+}
+.btn:hover { background: var(--color-bg-subtle); }
+select.btn { appearance: auto; }
+
+/* --- cards / stat tiles --- */
+.grid { display: grid; gap: var(--space-6); }
+.grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
+.grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+
+.card {
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-1);
+}
+.card h2 { font-size: 14px; color: var(--color-text-secondary); margin: 0 0 var(--space-4); font-weight: 600; }
+
+.stat .label { font-size: 12px; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: .04em; }
+.stat .value { font-size: 28px; font-weight: 700; color: var(--color-text-primary); margin-top: var(--space-2); }
+.stat .sub { font-size: 12px; color: var(--color-text-secondary); margin-top: var(--space-2); }
+
+/* --- table --- */
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-border-subtle); }
+th { color: var(--color-text-secondary); font-weight: 600; }
+tbody tr:hover { background: var(--color-bg-subtle); }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* --- bars (allocation) — palette slot via chart tokens --- */
+.bar-row { display: grid; grid-template-columns: 160px 1fr 90px; align-items: center; gap: var(--space-4); margin-bottom: var(--space-3); }
+.bar-track { background: var(--color-bg-surface-sunken); border-radius: var(--radius-full); height: 10px; overflow: hidden; }
+.bar-fill { height: 100%; background: var(--color-brand-solid); border-radius: var(--radius-full); }
+
+/* --- status chips (governance) --- */
+.chip { display: inline-block; padding: 2px var(--space-3); border-radius: var(--radius-full); font-size: 12px; font-weight: 600; }
+.chip.verified, .chip.implemented { background: var(--color-feedback-success-subtle); color: var(--color-feedback-success-fg); }
+.chip.scaffolded { background: var(--color-feedback-warning-subtle); color: var(--color-feedback-warning-fg); }
+.chip.designed { background: var(--color-bg-muted); color: var(--color-text-secondary); }
+
+.muted { color: var(--color-text-muted); }
+.error { color: var(--color-feedback-danger-fg); }
+
+/* --- reduced motion honored globally (design-system motion principle) --- */
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}

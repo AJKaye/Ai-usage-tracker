@@ -1,0 +1,491 @@
+/* =============================================================================
+   AI Usage Tracker — Design Tokens (CSS custom properties)
+   GENERATED ARTIFACT — in production this is emitted by Style Dictionary from
+   design-system/tokens/**. This hand-authored seed is the reference output and
+   is safe to consume directly until the build pipeline lands (see scripts/build.md).
+
+   THE DISTRIBUTION CONTRACT
+   -------------------------
+   Every component references ROLE tokens (--color-bg-*, --space-*, --radius-*),
+   never a raw hex/px and never a primitive family token. A theme is a scope that
+   re-points these variables. Swap the scope -> the whole app restyles, zero
+   component edits. That is what makes "change once, applies everywhere" true.
+
+   LAYERS
+     1. Primitive  --color-<family>-<step> / --space-<n> / --font-* / --radius-*
+                   / --shadow-* / --dur-* / --ease-*   (brand-neutral, raw values)
+     2. Semantic   --color-bg-* / -text-* / -border-* / -feedback-* / -brand-*
+                   (alias primitives; carry light/dark + tenant modes)
+     3. Component  --btn-* / --card-* / --table-* / --input-* / --stat-* / --chip-*
+                   (consume ONLY the semantic layer)
+
+   Hard rule: semantic + component tokens NEVER hold a raw hex — always var() a
+   primitive. If you need a new value, add the primitive first.
+   ========================================================================== */
+
+/* ============================ 1. PRIMITIVES ============================== */
+/* Brand-neutral raw scales. Components must not reference these directly.     */
+:root {
+  /* --- Neutral (slate) ramp --- */
+  --color-gray-50:  #f8fafc;
+  --color-gray-100: #f1f5f9;
+  --color-gray-200: #e2e8f0;
+  --color-gray-300: #cbd5e1;
+  --color-gray-400: #94a3b8;
+  --color-gray-500: #64748b;
+  --color-gray-600: #475569;
+  --color-gray-700: #334155;
+  --color-gray-800: #1e293b;
+  --color-gray-900: #0f172a;
+  --color-gray-950: #020617;
+
+  /* --- Brand ramp (generic professional blue; overridden per tenant) --- */
+  --color-brand-50:  #eff6ff;
+  --color-brand-100: #dbeafe;
+  --color-brand-200: #bfdbfe;
+  --color-brand-300: #93c5fd;
+  --color-brand-400: #60a5fa;
+  --color-brand-500: #3b82f6;
+  --color-brand-600: #2563eb;
+  --color-brand-700: #1d4ed8;
+  --color-brand-800: #1e40af;
+  --color-brand-900: #1e3a8a;
+  --color-brand-950: #172554;
+
+  /* --- Feedback ramps --- */
+  --color-green-50:  #f0fdf4;
+  --color-green-100: #dcfce7;
+  --color-green-400: #4ade80;
+  --color-green-500: #16a34a;
+  --color-green-600: #15803d;
+  --color-green-700: #166534;
+  --color-amber-50:  #fffbeb;
+  --color-amber-100: #fef3c7;
+  --color-amber-300: #fcd34d;
+  --color-amber-500: #d97706;
+  --color-amber-600: #b45309;
+  --color-amber-700: #92400e;
+  --color-red-50:    #fef2f2;
+  --color-red-100:   #fee2e2;
+  --color-red-400:   #f87171;
+  --color-red-500:   #dc2626;
+  --color-red-600:   #b91c1c;
+  --color-red-700:   #991b1b;
+
+  /* --- Absolutes --- */
+  --color-white: #ffffff;
+  --color-black: #000000;
+
+  /* --- Spacing (single canonical 4/8 ramp, dense-dashboard tuned) --- */
+  --space-0:  0;
+  --space-1:  2px;   /* hairline gaps; chart surface-gap */
+  --space-2:  4px;
+  --space-3:  8px;
+  --space-4:  12px;
+  --space-5:  16px;
+  --space-6:  20px;
+  --space-7:  24px;
+  --space-8:  32px;
+  --space-9:  40px;
+  --space-10: 48px;
+  --space-11: 64px;
+  --space-12: 96px;
+
+  /* --- Radii (control 10px / input 3px echo an intentional split) --- */
+  --radius-none: 0;
+  --radius-xs:   3px;
+  --radius-sm:   6px;
+  --radius-md:   8px;
+  --radius-lg:   10px;
+  --radius-xl:   16px;
+  --radius-2xl:  24px;
+  --radius-full: 9999px;
+
+  /* --- Type --- */
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+  /* charts stay in the UI sans by mandate — no display/serif face in data-viz */
+  --font-display: var(--font-sans);
+
+  --fs-2xs: 11px;
+  --fs-xs:  12px;
+  --fs-sm:  13px;
+  --fs-base:14px;   /* data-dense apps read at 13-14px, not a 18px marketing base */
+  --fs-md:  16px;
+  --fs-lg:  18px;
+  --fs-xl:  20px;
+  --fs-2xl: 24px;
+  --fs-3xl: 30px;
+  --fs-4xl: 36px;
+  --fs-5xl: 48px;   /* hero figure floor */
+
+  --lh-tight:   1.2;
+  --lh-snug:    1.35;
+  --lh-normal:  1.5;
+  --lh-relaxed: 1.65;
+
+  --fw-regular:  400;
+  --fw-medium:   500;
+  --fw-semibold: 600;
+  --fw-bold:     700;
+
+  --ls-tight:  -0.01em;  /* big numbers */
+  --ls-normal: 0;
+  --ls-wide:   0.04em;   /* uppercase labels */
+
+  /* --- Elevation (authored fresh; none existed in source brand kits) --- */
+  --shadow-0: none;
+  --shadow-1: 0 1px 2px rgba(0,0,0,.06), 0 1px 3px rgba(0,0,0,.10);
+  --shadow-2: 0 1px 2px rgba(0,0,0,.05), 0 4px 12px rgba(0,0,0,.08);
+  --shadow-3: 0 4px 6px rgba(0,0,0,.05), 0 12px 24px rgba(0,0,0,.10);
+  --shadow-4: 0 8px 16px rgba(0,0,0,.08), 0 24px 48px rgba(0,0,0,.16);
+
+  /* --- Motion --- */
+  --dur-instant: 0ms;
+  --dur-micro:   120ms;
+  --dur-fast:    180ms;
+  --dur-base:    240ms;
+  --dur-slow:    320ms;
+  --ease-standard:   cubic-bezier(0.2, 0, 0, 1);
+  --ease-out:        cubic-bezier(0, 0, 0.2, 1);   /* entering */
+  --ease-in:         cubic-bezier(0.4, 0, 1, 1);   /* exiting */
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+
+  /* --- Z-index --- */
+  --z-base: 0; --z-sticky: 100; --z-dropdown: 200; --z-overlay: 800;
+  --z-modal: 900; --z-toast: 1000;
+
+  /* ==================== 2. SEMANTICS — LIGHT (default) =================== */
+  color-scheme: light;
+
+  /* Backgrounds */
+  --color-bg-canvas:         var(--color-gray-50);
+  --color-bg-surface:        var(--color-white);
+  --color-bg-surface-raised: var(--color-white);
+  --color-bg-surface-sunken: var(--color-gray-100);
+  --color-bg-subtle:         var(--color-gray-100);  /* row hover / hover fill */
+  --color-bg-muted:          var(--color-gray-200);
+  --color-bg-inverse:        var(--color-gray-900);
+  --color-bg-scrim:          rgba(2, 6, 23, .45);    /* modal scrim 40-60% */
+
+  /* Text */
+  --color-text-primary:   var(--color-gray-900);
+  --color-text-secondary: var(--color-gray-600);
+  --color-text-muted:     var(--color-gray-500);   /* still AA >=4.5 on surface */
+  --color-text-disabled:  var(--color-gray-400);
+  --color-text-inverse:   var(--color-white);
+  --color-text-on-brand:  var(--color-white);
+  --color-text-link:      var(--color-brand-700);
+
+  /* Borders */
+  --color-border-subtle:  var(--color-gray-200);
+  --color-border-default: var(--color-gray-300);
+  --color-border-strong:  var(--color-gray-400);
+  --color-border-focus:   var(--color-brand-600);
+  --color-border-brand:   var(--color-brand-600);
+
+  /* Brand roles */
+  --color-brand-solid:        var(--color-brand-600);
+  --color-brand-solid-hover:  var(--color-brand-700);
+  --color-brand-solid-active: var(--color-brand-800);
+  --color-brand-subtle:       var(--color-brand-50);
+  --color-brand-text:         var(--color-brand-700);
+
+  /* Feedback (each: subtle bg / fg text / border / solid) */
+  --color-feedback-success-subtle: var(--color-green-50);
+  --color-feedback-success-fg:     var(--color-green-700);
+  --color-feedback-success-border: var(--color-green-500);
+  --color-feedback-success-solid:  var(--color-green-600);
+  --color-feedback-warning-subtle: var(--color-amber-50);
+  --color-feedback-warning-fg:     var(--color-amber-700);
+  --color-feedback-warning-border: var(--color-amber-500);
+  --color-feedback-warning-solid:  var(--color-amber-600);
+  --color-feedback-danger-subtle:  var(--color-red-50);
+  --color-feedback-danger-fg:      var(--color-red-600);
+  --color-feedback-danger-border:  var(--color-red-500);
+  --color-feedback-danger-solid:   var(--color-red-600);
+  --color-feedback-info-subtle:    var(--color-brand-50);
+  --color-feedback-info-fg:        var(--color-brand-700);
+  --color-feedback-info-solid:     var(--color-brand-600);
+
+  /* Focus ring (2-4px visible; brand hue) */
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+  --focus-ring-color: var(--color-brand-600);
+
+  /* Chart chrome (exact dataviz values; identical token names light/dark) */
+  --chart-surface:      #fcfcfb;
+  --chart-plane:        #f9f9f7;
+  --chart-ink-primary:  #0b0b0b;
+  --chart-ink-secondary:#52514e;
+  --chart-ink-muted:    #898781;
+  --chart-gridline:     #e1e0d9;
+  --chart-baseline:     #c3c2b7;
+  --chart-delta-good:   #006300;
+  --chart-border:       rgba(11,11,11,.10);
+  --chart-diverging-mid:#f0efec;
+  --chart-surface-gap:  var(--space-1);  /* the 2px white gap between marks */
+
+  /* Chart categorical palette — GENERIC VALIDATED TEMPLATE (light).
+     Swap per tenant, then re-run scripts/validate_palette.mjs before shipping. */
+  --chart-cat-1: #2a78d6;  /* blue    */
+  --chart-cat-2: #eb6834;  /* orange  */
+  --chart-cat-3: #1baf7a;  /* aqua    */
+  --chart-cat-4: #eda100;  /* yellow  */
+  --chart-cat-5: #e87ba4;  /* magenta */
+  --chart-cat-6: #008300;  /* green   */
+  --chart-cat-7: #4a3aa7;  /* violet  */
+  --chart-cat-8: #e34948;  /* red     */
+  /* Sequential (blue, magnitude) — anchors: */
+  --chart-seq-100: #cde2fb; --chart-seq-400: #3987e5; --chart-seq-700: #0d366b;
+  /* Diverging poles (blue <-> red), gray midpoint via --chart-diverging-mid */
+  --chart-div-low:  #2a78d6;
+  --chart-div-high: #e34948;
+  /* Status (fixed — never themed; always paired with icon + label) */
+  --chart-status-good:     #0ca30c;
+  --chart-status-warning:  #fab219;
+  --chart-status-serious:  #ec835a;
+  --chart-status-critical: #d03b3b;
+
+  /* ==================== 3. COMPONENT TOKENS ============================== */
+  /* Button — primary */
+  --btn-primary-bg:        var(--color-brand-solid);
+  --btn-primary-bg-hover:  var(--color-brand-solid-hover);
+  --btn-primary-bg-active: var(--color-brand-solid-active);
+  --btn-primary-fg:        var(--color-text-on-brand);
+  --btn-radius:            var(--radius-lg);
+  --btn-pad-x:             var(--space-5);
+  --btn-pad-y:             var(--space-3);
+  --btn-font-weight:       var(--fw-semibold);
+  /* Button — secondary (outline) */
+  --btn-secondary-bg:       transparent;
+  --btn-secondary-bg-hover: var(--color-bg-subtle);
+  --btn-secondary-fg:       var(--color-text-primary);
+  --btn-secondary-border:   var(--color-border-default);
+
+  /* Card */
+  --card-bg:      var(--color-bg-surface);
+  --card-border:  var(--color-border-subtle);
+  --card-radius:  var(--radius-lg);
+  --card-shadow:  var(--shadow-2);
+  --card-pad:     var(--space-6);
+
+  /* Input */
+  --input-bg:          var(--color-bg-surface);
+  --input-fg:          var(--color-text-primary);
+  --input-border:      var(--color-border-default);
+  --input-border-hover:var(--color-border-strong);
+  --input-radius:      var(--radius-xs);
+  --input-pad-x:       var(--space-4);
+  --input-pad-y:       var(--space-3);
+  --input-placeholder: var(--color-text-muted);
+
+  /* Table (data-dense) */
+  --table-header-bg:    var(--color-bg-subtle);
+  --table-header-fg:    var(--color-text-secondary);
+  --table-row-hover:    var(--color-bg-subtle);
+  --table-border:       var(--color-border-subtle);
+  --table-cell-pad-x:   var(--space-5);
+  --table-cell-pad-y:   var(--space-3);
+  --table-row-flash:    var(--color-brand-50);  /* changed-row highlight */
+
+  /* Stat tile */
+  --stat-label-fg:    var(--color-text-secondary);
+  --stat-value-fg:    var(--color-text-primary);
+  --stat-value-size:  var(--fs-3xl);
+  --stat-value-weight:var(--fw-semibold);
+  --hero-figure-size: var(--fs-5xl);
+
+  /* Status chip */
+  --chip-radius: var(--radius-full);
+  --chip-pad-x:  var(--space-3);
+  --chip-pad-y:  var(--space-1);
+  --chip-font:   var(--fs-xs);
+
+  /* App chrome */
+  --sidebar-bg:      var(--color-bg-surface);
+  --sidebar-border:  var(--color-border-subtle);
+  --topbar-bg:       var(--color-bg-surface);
+  --topbar-border:   var(--color-border-subtle);
+}
+
+/* ============================ DARK OVERRIDES ============================= */
+/* Authored as its own set (not an inversion). Overrides SEMANTIC + CHART-CHROME
+   + COMPONENT-surface tokens only; primitives are mode-invariant.
+   Applied under BOTH the OS media query and the [data-theme="dark"] toggle so a
+   manual choice always wins. (dist/ is generated, so this duplication is
+   machine-produced in production — see build.md.) */
+
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+
+    --color-bg-canvas:         var(--color-gray-950);
+    --color-bg-surface:        var(--color-gray-900);
+    --color-bg-surface-raised: var(--color-gray-800);  /* raised = lighter in dark */
+    --color-bg-surface-sunken: var(--color-gray-950);
+    --color-bg-subtle:         var(--color-gray-800);
+    --color-bg-muted:          var(--color-gray-700);
+    --color-bg-inverse:        var(--color-gray-100);
+    --color-bg-scrim:          rgba(0, 0, 0, .60);
+
+    --color-text-primary:   var(--color-gray-50);
+    --color-text-secondary: var(--color-gray-300);
+    --color-text-muted:     var(--color-gray-400);   /* >=4.5 on gray-900 */
+    --color-text-disabled:  var(--color-gray-600);
+    --color-text-link:      var(--color-brand-300);
+
+    --color-border-subtle:  var(--color-gray-800);
+    --color-border-default: var(--color-gray-700);
+    --color-border-strong:  var(--color-gray-600);
+    --color-border-focus:   var(--color-brand-400);
+    --color-border-brand:   var(--color-brand-400);
+
+    --color-brand-solid:        var(--color-brand-600); /* white text stays AA */
+    --color-brand-solid-hover:  var(--color-brand-500);
+    --color-brand-solid-active: var(--color-brand-400);
+    --color-brand-subtle:       var(--color-brand-950);
+    --color-brand-text:         var(--color-brand-300);
+
+    --color-feedback-success-subtle: rgba(22,163,74,.15);
+    --color-feedback-success-fg:     var(--color-green-400);
+    --color-feedback-warning-subtle: rgba(217,119,6,.16);
+    --color-feedback-warning-fg:     var(--color-amber-300);
+    --color-feedback-danger-subtle:  rgba(220,38,38,.16);
+    --color-feedback-danger-fg:      var(--color-red-400);
+    --color-feedback-info-subtle:    var(--color-brand-950);
+    --color-feedback-info-fg:        var(--color-brand-300);
+
+    --focus-ring-color: var(--color-brand-400);
+
+    /* Chart chrome — dark */
+    --chart-surface:      #1a1a19;
+    --chart-plane:        #0d0d0d;
+    --chart-ink-primary:  #ffffff;
+    --chart-ink-secondary:#c3c2b7;
+    --chart-ink-muted:    #898781;
+    --chart-gridline:     #2c2c2a;
+    --chart-baseline:     #383835;
+    --chart-delta-good:   #0ca30c;
+    --chart-border:       rgba(255,255,255,.10);
+    --chart-diverging-mid:#383835;
+    /* Chart categorical — dark steps of the same hues */
+    --chart-cat-1: #3987e5; --chart-cat-2: #d95926; --chart-cat-3: #199e70;
+    --chart-cat-4: #c98500; --chart-cat-5: #d55181; --chart-cat-6: #008300;
+    --chart-cat-7: #9085e9; --chart-cat-8: #e66767;
+
+    --shadow-1: 0 1px 2px rgba(0,0,0,.4);
+    --shadow-2: 0 2px 4px rgba(0,0,0,.4), 0 6px 16px rgba(0,0,0,.5);
+    --shadow-3: 0 6px 12px rgba(0,0,0,.5), 0 16px 32px rgba(0,0,0,.55);
+    --shadow-4: 0 12px 24px rgba(0,0,0,.55), 0 32px 64px rgba(0,0,0,.6);
+
+    --card-shadow: var(--shadow-2);
+    --table-row-flash: rgba(37,99,235,.22);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-bg-canvas:         var(--color-gray-950);
+  --color-bg-surface:        var(--color-gray-900);
+  --color-bg-surface-raised: var(--color-gray-800);
+  --color-bg-surface-sunken: var(--color-gray-950);
+  --color-bg-subtle:         var(--color-gray-800);
+  --color-bg-muted:          var(--color-gray-700);
+  --color-bg-inverse:        var(--color-gray-100);
+  --color-bg-scrim:          rgba(0, 0, 0, .60);
+
+  --color-text-primary:   var(--color-gray-50);
+  --color-text-secondary: var(--color-gray-300);
+  --color-text-muted:     var(--color-gray-400);
+  --color-text-disabled:  var(--color-gray-600);
+  --color-text-link:      var(--color-brand-300);
+
+  --color-border-subtle:  var(--color-gray-800);
+  --color-border-default: var(--color-gray-700);
+  --color-border-strong:  var(--color-gray-600);
+  --color-border-focus:   var(--color-brand-400);
+  --color-border-brand:   var(--color-brand-400);
+
+  --color-brand-solid:        var(--color-brand-600);
+  --color-brand-solid-hover:  var(--color-brand-500);
+  --color-brand-solid-active: var(--color-brand-400);
+  --color-brand-subtle:       var(--color-brand-950);
+  --color-brand-text:         var(--color-brand-300);
+
+  --color-feedback-success-subtle: rgba(22,163,74,.15);
+  --color-feedback-success-fg:     var(--color-green-400);
+  --color-feedback-warning-subtle: rgba(217,119,6,.16);
+  --color-feedback-warning-fg:     var(--color-amber-300);
+  --color-feedback-danger-subtle:  rgba(220,38,38,.16);
+  --color-feedback-danger-fg:      var(--color-red-400);
+  --color-feedback-info-subtle:    var(--color-brand-950);
+  --color-feedback-info-fg:        var(--color-brand-300);
+
+  --focus-ring-color: var(--color-brand-400);
+
+  --chart-surface:      #1a1a19;
+  --chart-plane:        #0d0d0d;
+  --chart-ink-primary:  #ffffff;
+  --chart-ink-secondary:#c3c2b7;
+  --chart-ink-muted:    #898781;
+  --chart-gridline:     #2c2c2a;
+  --chart-baseline:     #383835;
+  --chart-delta-good:   #0ca30c;
+  --chart-border:       rgba(255,255,255,.10);
+  --chart-diverging-mid:#383835;
+  --chart-cat-1: #3987e5; --chart-cat-2: #d95926; --chart-cat-3: #199e70;
+  --chart-cat-4: #c98500; --chart-cat-5: #d55181; --chart-cat-6: #008300;
+  --chart-cat-7: #9085e9; --chart-cat-8: #e66767;
+
+  --shadow-1: 0 1px 2px rgba(0,0,0,.4);
+  --shadow-2: 0 2px 4px rgba(0,0,0,.4), 0 6px 16px rgba(0,0,0,.5);
+  --shadow-3: 0 6px 12px rgba(0,0,0,.5), 0 16px 32px rgba(0,0,0,.55);
+  --shadow-4: 0 12px 24px rgba(0,0,0,.55), 0 32px 64px rgba(0,0,0,.6);
+
+  --card-shadow: var(--shadow-2);
+  --table-row-flash: rgba(37,99,235,.22);
+}
+
+/* ===================== TENANT THEME EXAMPLE (white-label) ================ */
+/* A tenant theme overrides ONLY brand primitives + a few brand component
+   knobs, and INHERITS the entire semantic/component system. This is the whole
+   white-label surface: ~a dozen values. Compose with dark via
+   [data-theme="dark"] on a parent and this on the app root, or generate a
+   combined "example-ssc-dark" scope in the pipeline.
+   NOTE: chart categorical palette is intentionally NOT overridden here — a
+   brand chart palette must pass scripts/validate_palette.mjs first. */
+:root[data-theme="example-ssc"] {
+  --color-brand-50:  #e6f1fa;
+  --color-brand-100: #cfe6f6;
+  --color-brand-200: #99ccec;
+  --color-brand-300: #66b3e3;
+  --color-brand-400: #3399d6;
+  --color-brand-500: #0077c8;  /* SS&C Blue */
+  --color-brand-600: #0077c8;
+  --color-brand-700: #1f56a5;  /* deep blue — AA for small text */
+  --color-brand-800: #17408a;
+  --color-brand-900: #102f66;
+  --color-brand-950: #0a1f45;
+
+  --font-display: "Barlow Semi Condensed", var(--font-sans);
+  /* body/UI stays Inter-like; set --font-sans at tenant build if self-hosting Inter */
+
+  --btn-radius:    10px;   /* SS&C: 10px buttons */
+  --input-radius:  3px;    /* SS&C: 3px inputs   */
+  /* brand accent (amber) available if a tenant wants a distinct CTA-hover */
+  --color-brand-accent: #f1b434;
+}
+
+/* ===================== GLOBAL REDUCED-MOTION OVERRIDE ==================== */
+/* Mandatory, not optional. Kills motion while preserving END states so layout
+   never breaks. Verbatim from design-motion-principles/references/accessibility. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

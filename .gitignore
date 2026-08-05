@@ -17,9 +17,15 @@ publish/
 # Style Dictionary pipeline lands (see design-system/scripts/build.md), so it is
 # intentionally NOT ignored here.
 
-# node (design-system tooling / future SPA)
+# node (design-system tooling / the SPA)
 node_modules/
 npm-debug.log*
+web/.vite/
+
+# The built SPA (web/ → src/UsageTracker.Ingestion.Api/wwwroot) is CHECKED IN as the
+# reference bundle so `dotnet publish` embeds the UI with no Node toolchain on the
+# build/CI host (same rationale as design-system/dist). Rebuild with `npm run build`
+# in web/. It is intentionally NOT ignored.
 
 # local env / secrets — never commit
 .env
