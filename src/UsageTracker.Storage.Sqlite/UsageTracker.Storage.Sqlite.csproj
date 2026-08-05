@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Embedded, zero-infra IEventStore for the downloadable .exe (solo profile).
+       Microsoft.Data.Sqlite bundles the native SQLite engine per-RID, so the
+       target machine needs no server, no daemon, no admin, no Docker — it just
+       runs. Satisfies the SAME IEventStore contract + EventStoreContractTests as
+       the ClickHouse store, so it is a peer implementation, not a toy. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>UsageTracker.Storage.Sqlite</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\UsageTracker.Contracts\UsageTracker.Contracts.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.10" />
+    <!-- Pin the SQLitePCLRaw bundle forward to the patched native engine:
+         Microsoft.Data.Sqlite 10.0.10 pulls SQLitePCLRaw 2.1.11 transitively,
+         which has a known high-severity CVE (GHSA-2m69-gcr7-jv3q / NU1903).
+         3.0.5 resolves to a fixed e_sqlite3 (3.5x). Direct ref wins over transitive. -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
+  </ItemGroup>
+</Project>

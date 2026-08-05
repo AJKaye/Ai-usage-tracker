@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- A REFERENCE adapter plugin. Demonstrates the "add a surface = ship a
+       plugin against the contract version, no core change" pattern (§5). Shaped
+       after the Cursor Admin API (real tokens per event). Emits canonical spans;
+       the harness loads it and the version gate admits it. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>UsageTracker.Adapters.ReferenceCursor</RootNamespace>
+    <!-- plugins are loaded by path, not project-referenced by the host -->
+    <EnableDefaultCompileItems>true</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Contracts marked private so it is NOT copied next to the plugin dll;
+         the host owns the shared contract assembly (unified type identity). -->
+    <ProjectReference Include="..\..\src\UsageTracker.Contracts\UsageTracker.Contracts.csproj" Private="false" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,30 @@
+{
+  "$description": "EXAMPLE tenant theme — SS&C Technologies, included as ONE reference white-label theme (NOT the product base; decision B1). Demonstrates that adopting a brand is ~a dozen values. Source: the SS&C brand kit (design/SSCBranding). Emits the [data-theme=\"example-ssc\"] scope in dist/tokens.css.",
+  "theme": {
+    "name": "example-ssc",
+    "extends": "base"
+  },
+  "brand": {
+    "$description": "SS&C Blue #0077C8 as the 500/600 solid; deep blue #1F56A5 at 700 for AA small-text (kit flags #0077C8 on white ~4.0:1 — borderline for small body).",
+    "ramp": {
+      "50":"#e6f1fa","100":"#cfe6f6","200":"#99ccec","300":"#66b3e3","400":"#3399d6",
+      "500":"#0077c8","600":"#0077c8","700":"#1f56a5","800":"#17408a","900":"#102f66","950":"#0a1f45"
+    },
+    "accent": "#f1b434",
+    "_accent_note": "SS&C amber — use only as a CTA-hover or non-text accent; amber on white is NOT AA for text (kit rule). Secondary brand accent is SS&C purple #6f5091."
+  },
+  "font": {
+    "$description": "Headings + buttons in Barlow Semi Condensed; body/UI in Inter. Both free Google Fonts — self-host for air-gap.",
+    "display": "\"Barlow Semi Condensed\", system-ui, sans-serif",
+    "sans": "\"Inter\", system-ui, -apple-system, \"Segoe UI\", sans-serif"
+  },
+  "radius": {
+    "$description": "SS&C intentional split: 10px buttons, 3px inputs.",
+    "control": "10px",
+    "input": "3px"
+  },
+  "chart": {
+    "$description": "Left as inherit — an SS&C-brand chart palette (blue->teal->purple->green->amber from the kit's extended colors) MUST clear scripts/validate_palette.mjs before replacing the default. Until validated, inherit the accessibility-safe generic template.",
+    "palette": "inherit"
+  }
+}

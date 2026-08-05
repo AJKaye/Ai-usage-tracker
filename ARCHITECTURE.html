@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Usage Tracker — Architecture Report</title>
+<style>
+  :root {
+    --bg: #faf9f6;
+    --surface: #ffffff;
+    --surface-2: #f4f2ec;
+    --ink: #1c1b19;
+    --ink-soft: #55524c;
+    --ink-faint: #8a867e;
+    --line: #e5e2d9;
+    --line-strong: #d6d2c6;
+    --accent: #b45309;
+    --accent-soft: #fdf1e3;
+    --teal: #0f766e;
+    --teal-soft: #e6f2f0;
+    --red: #b91c1c;
+    --red-soft: #fbeceb;
+    --amber: #a16207;
+    --amber-soft: #fbf3d9;
+    --code-bg: #f4f2ec;
+    --shadow: 0 1px 2px rgba(28,27,25,.05), 0 8px 24px rgba(28,27,25,.05);
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: "SF Mono", "JetBrains Mono", "Cascadia Code", ui-monospace, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #171614;
+      --surface: #201f1c;
+      --surface-2: #262420;
+      --ink: #ece9e2;
+      --ink-soft: #b3aea3;
+      --ink-faint: #837e73;
+      --line: #302e29;
+      --line-strong: #3d3a34;
+      --accent: #e0954a;
+      --accent-soft: #2b2113;
+      --teal: #4bb3a8;
+      --teal-soft: #12241f;
+      --red: #e58a80;
+      --red-soft: #2a1817;
+      --amber: #d6b04e;
+      --amber-soft: #29220f;
+      --code-bg: #262420;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35);
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 1.5rem; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 18px;
+    line-height: 1.66;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  .layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 0; max-width: 1500px; margin: 0 auto; }
+
+  /* ---- Sidebar ---- */
+  nav.toc {
+    position: sticky; top: 0; align-self: start;
+    height: 100vh; overflow-y: auto;
+    padding: 2.2rem 1.6rem 3rem 2rem;
+    border-right: 1px solid var(--line);
+    background: var(--surface-2);
+    font-family: var(--sans);
+  }
+  nav.toc .brand { font-size: .82rem; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); font-weight: 700; margin-bottom: .2rem; }
+  nav.toc .brand-sub { font-size: .78rem; color: var(--ink-faint); margin-bottom: 1.6rem; line-height: 1.4; }
+  nav.toc a { display: block; text-decoration: none; color: var(--ink-soft); font-size: .86rem; padding: .32rem .6rem; border-radius: 7px; line-height: 1.35; transition: background .12s, color .12s; }
+  nav.toc a:hover { background: var(--surface); color: var(--ink); }
+  nav.toc a .num { color: var(--ink-faint); font-variant-numeric: tabular-nums; margin-right: .5rem; font-weight: 600; }
+  nav.toc a.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  nav.toc a.active .num { color: var(--accent); }
+
+  /* ---- Main ---- */
+  main { padding: 3.2rem clamp(1.5rem, 4vw, 4.5rem) 6rem; min-width: 0; }
+  .doc-head { border-bottom: 2px solid var(--line-strong); padding-bottom: 1.8rem; margin-bottom: 2.4rem; }
+  .doc-head h1 { font-size: clamp(2rem, 4vw, 2.9rem); line-height: 1.12; margin: 0 0 .8rem; letter-spacing: -.015em; }
+  .doc-head .lede { font-size: 1.18rem; color: var(--ink-soft); font-style: italic; margin: 0 0 1.4rem; max-width: 60ch; }
+  .doc-head .meta { font-family: var(--sans); font-size: .8rem; color: var(--ink-faint); display: flex; gap: 1.4rem; flex-wrap: wrap; }
+  .doc-head .meta b { color: var(--ink-soft); font-weight: 600; }
+
+  h2 { font-size: 1.62rem; letter-spacing: -.01em; margin: 3.4rem 0 1rem; padding-top: .4rem; scroll-margin-top: 1rem; }
+  h2 .h2num { color: var(--accent); font-family: var(--sans); font-weight: 700; font-size: 1.15rem; margin-right: .6rem; }
+  h3 { font-family: var(--sans); font-size: 1.08rem; font-weight: 700; margin: 2.2rem 0 .7rem; color: var(--ink); }
+  h4 { font-family: var(--sans); font-size: .95rem; font-weight: 700; margin: 1.6rem 0 .5rem; color: var(--ink-soft); }
+  p { margin: 0 0 1.05rem; }
+  a { color: var(--accent); }
+  strong { font-weight: 700; }
+  ul, ol { margin: 0 0 1.1rem; padding-left: 1.4rem; }
+  li { margin-bottom: .5rem; }
+  hr { border: none; border-top: 1px solid var(--line); margin: 2.6rem 0; }
+
+  code { font-family: var(--mono); font-size: .82em; background: var(--code-bg); padding: .12em .4em; border-radius: 5px; border: 1px solid var(--line); color: var(--accent); word-break: break-word; }
+  pre { background: var(--code-bg); border: 1px solid var(--line-strong); border-radius: 12px; padding: 1.3rem 1.5rem; overflow-x: auto; margin: 1.4rem 0; box-shadow: var(--shadow); }
+  pre code { font-family: var(--mono); font-size: .78rem; line-height: 1.5; background: none; border: none; padding: 0; color: var(--ink-soft); white-space: pre; }
+
+  /* ---- Tables ---- */
+  .tbl-wrap { overflow-x: auto; margin: 1.4rem 0; border: 1px solid var(--line-strong); border-radius: 12px; box-shadow: var(--shadow); }
+  table { border-collapse: collapse; width: 100%; font-family: var(--sans); font-size: .82rem; background: var(--surface); }
+  th, td { text-align: left; padding: .72rem .9rem; border-bottom: 1px solid var(--line); vertical-align: top; line-height: 1.45; }
+  thead th { background: var(--surface-2); color: var(--ink); font-weight: 700; font-size: .74rem; letter-spacing: .04em; text-transform: uppercase; border-bottom: 2px solid var(--line-strong); position: sticky; top: 0; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: var(--surface-2); }
+  td code, th code { font-size: .78em; }
+
+  /* ---- Callouts ---- */
+  .callout { border-radius: 12px; padding: 1.2rem 1.4rem; margin: 1.6rem 0; font-family: var(--sans); font-size: .92rem; line-height: 1.6; border: 1px solid var(--line-strong); background: var(--surface); box-shadow: var(--shadow); }
+  .callout .ct { font-size: .74rem; letter-spacing: .1em; text-transform: uppercase; font-weight: 700; margin-bottom: .5rem; display: block; }
+  .callout p:last-child { margin-bottom: 0; }
+  .callout.thesis { background: var(--accent-soft); border-color: var(--accent); }
+  .callout.thesis .ct { color: var(--accent); }
+  .callout.thesis { font-family: var(--serif); font-size: 1.06rem; font-style: italic; line-height: 1.6; }
+  .callout.warn { background: var(--red-soft); border-color: var(--red); }
+  .callout.warn .ct { color: var(--red); }
+  .callout.note { background: var(--teal-soft); border-color: var(--teal); }
+  .callout.note .ct { color: var(--teal); }
+  .callout.meta { background: var(--surface-2); border-style: dashed; }
+  .callout.meta .ct { color: var(--ink-faint); }
+
+  /* ---- Confidence badges ---- */
+  .cf { display: inline-block; font-family: var(--sans); font-size: .68rem; font-weight: 700; letter-spacing: .04em; padding: .08em .5em; border-radius: 20px; vertical-align: middle; white-space: nowrap; border: 1px solid transparent; }
+  .cf-h { background: var(--teal-soft); color: var(--teal); border-color: var(--teal); }
+  .cf-m { background: var(--amber-soft); color: var(--amber); border-color: var(--amber); }
+  .cf-l { background: var(--red-soft); color: var(--red); border-color: var(--red); }
+  td .cf { font-size: .64rem; }
+
+  /* ---- Numbered gotcha / principle list ---- */
+  ol.big { list-style: none; padding-left: 0; counter-reset: bigc; }
+  ol.big > li { counter-increment: bigc; position: relative; padding: .1rem 0 .1rem 2.6rem; margin-bottom: .9rem; }
+  ol.big > li::before { content: counter(bigc); position: absolute; left: 0; top: .05rem; width: 1.85rem; height: 1.85rem; background: var(--accent-soft); color: var(--accent); font-family: var(--sans); font-weight: 700; font-size: .82rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 1px solid var(--accent); }
+
+  .footer { margin-top: 4rem; padding-top: 1.6rem; border-top: 1px solid var(--line); font-family: var(--sans); font-size: .8rem; color: var(--ink-faint); }
+
+  /* ---- Mobile ---- */
+  .menu-toggle { display: none; }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    nav.toc { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--line); max-height: none; }
+    main { padding-top: 2rem; }
+    body { font-size: 17px; }
+  }
+  @media print {
+    nav.toc { display: none; }
+    .layout { grid-template-columns: 1fr; max-width: none; }
+    body { background: #fff; color: #000; font-size: 11pt; }
+    .callout, pre, .tbl-wrap { box-shadow: none; break-inside: avoid; }
+    h2 { break-after: avoid; }
+    tr, li { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc">
+  <div class="brand">AI Usage Tracker</div>
+  <div class="brand-sub">Architecture Report · v1 · 2026-08-04</div>
+  <a href="#s0"><span class="num">0</span>The thesis</a>
+  <a href="#s1"><span class="num">1</span>Scope: what counts</a>
+  <a href="#s2"><span class="num">2</span>Four ingestion archetypes</a>
+  <a href="#s3"><span class="num">3</span>Canonical data model</a>
+  <a href="#s4"><span class="num">4</span>The cost engine</a>
+  <a href="#s5"><span class="num">5</span>Cost-engine gotchas</a>
+  <a href="#s6"><span class="num">6</span>FinOps &amp; efficiency</a>
+  <a href="#s7"><span class="num">7</span>Closed / coarse surfaces</a>
+  <a href="#s8"><span class="num">8</span>Recommended architecture</a>
+  <a href="#s9"><span class="num">9</span>Open items to verify</a>
+  <a href="#s10"><span class="num">10</span>Reference index</a>
+</nav>
+
+<main>
+  <header class="doc-head">
+    <h1>AI Usage Tracker — Architecture Report</h1>
+    <p class="lede">A standalone central repository that tracks AI usage across every platform and tool — direct model APIs, agent frameworks, MCP servers, RAG pipelines, AI gateways, IDE assistants, and RPA bots with embedded LLM steps — and computes cost and efficiency.</p>
+    <div class="meta">
+      <span><b>Compiled</b> 2026-08-04</span>
+      <span><b>Status</b> Design substrate for implementers</span>
+      <span><b>Confidence</b> <span class="cf cf-h">High</span> <span class="cf cf-m">Medium</span> <span class="cf cf-l">Low</span></span>
+    </div>
+  </header>
+
+  <div class="callout meta">
+    <span class="ct">How to read this</span>
+    <p>This is the design substrate for future agents building the tracker, grounded in a 2026-08 survey of the observability/FinOps landscape, the OpenTelemetry GenAI conventions, MCP, and the five major providers' usage/billing APIs. It is deliberately opinionated: it states <em>what to build and why</em>. Read the whole thing before writing code — the gotchas sections are load-bearing.</p>
+    <p><b>Confidence tags:</b> <span class="cf cf-h">High</span> = ≥2 credible sources or a vendor primary doc · <span class="cf cf-m">Medium</span> = single strong source · <span class="cf cf-l">Low</span> = thin / inferred / could not re-confirm. Dollar figures and experimental-spec details drift — re-verify anything load-bearing against a live source before shipping.</p>
+  </div>
+
+  <!-- 0 -->
+  <h2 id="s0"><span class="h2num">0</span>The one-paragraph thesis</h2>
+  <div class="callout thesis">
+    <span class="ct">Thesis</span>
+    <p>No existing product tracks <em>all</em> AI-consuming surfaces. Observability tools (Langfuse, LangSmith, Datadog, Phoenix) trace instrumented code deeply but miss closed surfaces and treat cost as an afterthought. Gateways (LiteLLM, Portkey, Cloudflare) see wire traffic with zero instrumentation but can't see internal chain/tool structure and label cost an "estimate." FinOps tools (CloudZero, Finout, OpenMeter) reconcile billing-grade dollars but at coarse grain. The opportunity — and the hard part — is to be the <strong>reconciliation hub</strong> that ingests from all four archetypes, normalizes to one schema (OpenTelemetry GenAI <code>gen_ai.*</code> + FOCUS cost columns), and reconciles <em>estimated</em> per-event cost against <em>authoritative</em> provider-billing cost. Everything below serves that thesis.</p>
+  </div>
+
+  <!-- 1 -->
+  <h2 id="s1"><span class="h2num">1</span>Scope: what "a platform or tool" means here</h2>
+  <p>The tracker must model usage from surfaces with wildly different fidelity. Design for a <strong>fidelity spectrum</strong>, not a single event shape:</p>
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th>Surface class</th><th>Examples</th><th>Native usage signal</th><th>Fidelity</th></tr></thead>
+    <tbody>
+      <tr><td>Direct model APIs</td><td>OpenAI, Anthropic, Gemini/Vertex, Azure Foundry, Bedrock</td><td>per-response <code>usage</code> object (tokens, cache, reasoning) + billing/usage reporting APIs</td><td><b>Highest</b> — real tokens + reconcilable dollars</td></tr>
+      <tr><td>AI gateways / proxies</td><td>LiteLLM, Portkey, Cloudflare, Kong, Envoy</td><td>normalized usage + often cost, on the wire</td><td>High — real tokens, estimated cost</td></tr>
+      <tr><td>Agent frameworks</td><td>LangChain/Graph, LlamaIndex, OpenAI Agents SDK, Claude Agent SDK, CrewAI, AutoGen</td><td>callback/trace hooks; <code>usage_metadata</code> on messages</td><td>High — real tokens + trace tree</td></tr>
+      <tr><td>MCP servers</td><td>any MCP tool/sampling server</td><td><b>none native</b> — no usage field on <code>CallToolResult</code> or <code>CreateMessageResult</code></td><td>Low — must derive from underlying model call</td></tr>
+      <tr><td>RAG pipelines</td><td>retriever + embedding + rerank + generate</td><td>OTel/OpenInference spans (<code>retrieval</code>, <code>embedding</code>, <code>reranker</code>) if instrumented</td><td>Medium/High if instrumented</td></tr>
+      <tr><td>IDE assistants</td><td>Cursor, GitHub Copilot, Claude Code</td><td>admin/metrics APIs — varies wildly (see §7)</td><td>Cursor/Claude Code: real tokens; Copilot: seats + acceptances only</td></tr>
+      <tr><td>RPA w/ embedded LLM</td><td>UiPath, Automation Anywhere</td><td>abstracted "AI units" / governance logs</td><td>Lowest — no per-token; coarse credits</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="callout note">
+    <span class="ct">Design consequence</span>
+    <p>The core event schema must degrade gracefully. A UiPath "1 AI unit" event and an Anthropic response with a five-way token split must both land in the same table, with a <code>granularity</code> marker so the cost engine knows whether it's pricing tokens, credits, seats, or request-counts. Do <strong>not</strong> design token-first and bolt on the coarse cases — design for the union and treat rich token data as the best-case fill.</p>
+  </div>
+
+  <!-- 2 -->
+  <h2 id="s2"><span class="h2num">2</span>Architectural landscape — the four ingestion archetypes</h2>
+  <p>Every product surveyed reduces to one or a hybrid of four ingestion mechanics. These are <strong>complementary, not competing</strong> — the tracker should offer all four. <span class="cf cf-h">High</span></p>
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th>Archetype</th><th>Who does it</th><th>Mechanism</th><th>Strengths</th><th>Weaknesses</th></tr></thead>
+    <tbody>
+      <tr><td><b>Proxy / Gateway</b></td><td>Helicone (proxy), Portkey, LiteLLM (proxy), Cloudflare, Kong, Envoy</td><td>App points base URL at gateway; it sees every request/response on the wire</td><td>Language-agnostic; <b>zero app code</b>; central choke point for cost/keys/limits/cache; captures cost natively</td><td>+20–40ms hop; availability dependency in critical path; <b>wire-level only — blind to internal chain/tool/retriever tree</b></td></tr>
+      <tr><td><b>SDK / in-process instrumentation</b></td><td>Langfuse, LangSmith, OpenLLMetry, Lunary, Datadog, Phoenix</td><td>SDK wraps client libs / decorators / callbacks; emits spans out-of-band (async)</td><td><b>Full trace-tree fidelity</b> (agents, tools, retrievers, nesting); no critical-path latency; rich metadata</td><td>Per-language SDK coverage; code changes; only sees instrumented code</td></tr>
+      <tr><td><b>OpenTelemetry (OTLP + GenAI conventions)</b></td><td>OpenLLMetry, Langfuse, LangSmith, Phoenix/OpenInference, Datadog, Envoy, Kong, LiteLLM</td><td>Standardized <code>gen_ai.*</code> / OpenInference spans over OTLP</td><td><b>Vendor-neutral, portable, no lock-in</b>; one instrumentation → many backends; the emerging lingua franca</td><td>GenAI conventions still <b>Development/experimental</b> — schema churn; content capture opt-in</td></tr>
+      <tr><td><b>Billing-API / usage-event reconciliation</b></td><td>OpenMeter (CloudEvents), CloudZero, Finout, Amberflo, FOCUS exports</td><td>Ingest normalized usage/billing events + pull provider billing APIs</td><td><b>Billing-grade accuracy</b>; ties to invoices/entitlements; cross-vendor rollup incl. GPU/cloud spend</td><td>Coarser granularity; reconciliation lag (hours–1 day); not real-time trace-level</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="callout note">
+    <span class="ct">The convergent reference architecture</span>
+    <p>The mature stacks pair a routing <b>gateway</b> for real-time cost/control + a vendor-neutral <b>OTel tracing layer</b> for deep agentic traces + a <b>metering/billing reconciler</b> for billing-grade truth. No single surveyed product spans all four — that gap is the tracker's differentiator. <span class="cf cf-h">High</span></p>
+  </div>
+
+  <!-- 3 -->
+  <h2 id="s3"><span class="h2num">3</span>The canonical data model</h2>
+
+  <h3>3.1 &nbsp;The hierarchy every trace tool converges on</h3>
+  <p>Despite different names, all trace-based tools use the same nested shape. Adopt it. <span class="cf cf-h">High</span></p>
+  <pre><code>Session / Thread              grouping key: session_id / thread_id / gen_ai.conversation.id
+└── Trace                     one end-to-end request; unique trace_id
+    └── Span (a.k.a. Observation / Run)   one unit of work; parent_span_id builds the tree
+        ├── kind: llm/generation     the model call — carries tokens + cost
+        ├── kind: agent
+        ├── kind: tool               (MCP tool calls map here)
+        ├── kind: chain/workflow/task
+        ├── kind: retriever/embedding    (RAG)
+        └── kind: reranker/guardrail/evaluator</code></pre>
+  <p>Name mapping across products (so ingest adapters can normalize):</p>
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th>Product</th><th>Trace unit</th><th>Span unit</th><th>Grouping</th><th>Span kinds</th></tr></thead>
+    <tbody>
+      <tr><td>Langfuse</td><td>Trace</td><td>Observation (Generation/Span/Event)</td><td>Session</td><td>3</td></tr>
+      <tr><td>LangSmith</td><td>Trace</td><td>Run</td><td>Thread</td><td>(freeform)</td></tr>
+      <tr><td>Datadog</td><td>Trace</td><td>Span</td><td>Session</td><td>7 (llm/workflow/agent/tool/task/embedding/retrieval)</td></tr>
+      <tr><td>Phoenix/OpenInference</td><td>Trace</td><td>Span</td><td>—</td><td><b>9</b> (+ reranker/guardrail/evaluator)</td></tr>
+      <tr><td>Lunary</td><td>Trace</td><td>Run</td><td>Thread</td><td>llm/agent/tool/chain/chat</td></tr>
+      <tr><td>OTel GenAI</td><td>(trace)</td><td>Span <code>{operation} {model}</code></td><td><code>gen_ai.conversation.id</code></td><td>via <code>operation.name</code> enum</td></tr>
+      <tr><td>Helicone / Cloudflare</td><td>— (flat)</td><td>request record</td><td>session / gateway</td><td>flat, no deep tree</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="callout note"><span class="ct">Recommendation</span><p>Make span <code>kind</code> first-class and extensible — the agentic era needs agent/tool/retriever/guardrail/evaluator kinds, and Phoenix's 9-kind set is the most forward-looking superset. <span class="cf cf-h">High</span></p></div>
+
+  <h3>3.2 &nbsp;Canonical span field set (superset schema)</h3>
+  <p>The union across all products. Store this; let adapters fill what their source provides.</p>
+  <ul>
+    <li><b>Identity / tree:</b> <code>trace_id</code>, <code>span_id</code>, <code>parent_span_id</code>, <code>session_id</code>, <code>kind</code>, <code>name</code>, <code>status</code></li>
+    <li><b>Model:</b> <code>request_model</code> + <code>response_model</code>, <code>provider</code>, <code>ml_app</code>/app-id, invocation params (<code>temperature</code>, <code>top_p</code>, <code>top_k</code>, <code>max_tokens</code>, <code>stream</code>, <code>seed</code>, <code>reasoning.level</code>/effort)</li>
+    <li><b>Content (opt-in, PII-sensitive):</b> <code>input_messages</code>, <code>output_messages</code>, <code>system_instructions</code>, <code>tool_definitions</code></li>
+    <li><b>Usage (the critical multi-bucket set):</b> <code>input_tokens</code>, <code>output_tokens</code>, <code>total_tokens</code>, <strong><code>reasoning_output_tokens</code></strong>, <strong><code>cache_read_input_tokens</code></strong>, <strong><code>cache_creation_input_tokens</code></strong>, <code>audio_tokens</code>, <code>image_tokens</code> — <em>mutually-exclusive bucketing matters</em> so tokens aren't double-counted</li>
+    <li><b>Cost (fine-grained line items):</b> <code>input_cost</code>, <code>output_cost</code>, <code>total_cost</code> + <code>cache_read_cost</code>, <code>cache_creation_cost</code>, <code>reasoning_cost</code>, <code>tool_usage_cost</code></li>
+    <li><b>Timing:</b> <code>start_time</code>, <code>end_time</code>, <code>duration</code>, <strong><code>time_to_first_token</code></strong> (TTFT)</li>
+    <li><b>Attribution / metadata:</b> <code>user_id</code>/<code>end_user</code>, <code>org_id</code>/<code>team_id</code>, <code>tags</code>, arbitrary <code>metadata</code>, <code>environment</code>, <code>version</code>, plus FinOps dims (§6)</li>
+    <li><b>Gateway-only extras:</b> <code>cache_hit</code>/status, <code>retry</code> status, <code>fallback</code> status, <code>load_balance</code> status</li>
+    <li><b>Coarse-surface fields (for RPA/IDE):</b> <code>granularity</code> (<code>token</code>|<code>credit</code>|<code>seat</code>|<code>request</code>), <code>units_consumed</code>, <code>unit_type</code> (e.g. "ai_unit", "premium_request")</li>
+  </ul>
+
+  <h3>3.3 &nbsp;The wire schema: OpenTelemetry GenAI <code>gen_ai.*</code> + OpenInference</h3>
+  <p><strong>Adopt OTel GenAI semantic conventions as the primary wire schema.</strong> It is the emerging cross-platform standard, emitted natively or ingestibly by AutoGen, Envoy, Kong, LiteLLM, LangSmith, Langfuse, Datadog, OpenLLMetry. <span class="cf cf-h">High</span></p>
+  <p><b>Structural facts:</b></p>
+  <ul>
+    <li>The conventions now live in a <b>dedicated repo</b>: <code>open-telemetry/semantic-conventions-genai</code> (moved out of the main semconv repo). Covers spans, metrics, events, MCP, and provider-specific conventions. <span class="cf cf-h">High</span></li>
+    <li><b>Stability: essentially everything <code>gen_ai.*</code> is "Development"</b> (was "Experimental"). Only general-purpose attrs (<code>error.type</code>, <code>server.address</code>) are Stable. <b>Pin a version and plan for churn.</b> <span class="cf cf-h">High</span></li>
+  </ul>
+  <p><b>Core span attributes</b> (verbatim names — this is a schema, get them exact): <span class="cf cf-h">High</span></p>
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th>Attribute</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>gen_ai.operation.name</code></td><td>Required. Enum: <code>chat</code>, <code>text_completion</code>, <code>generate_content</code>, <code>embeddings</code>, <code>retrieval</code>, <code>execute_tool</code>, <code>invoke_agent</code>, <code>invoke_workflow</code>, <code>plan</code>, <code>create_agent</code>, <code>fetch_response</code>, <code>create_memory</code>, <code>search_memory</code>, <code>update_memory</code>, <code>delete_memory</code>, <code>upsert_memory</code>, <code>create_memory_store</code>, <code>delete_memory_store</code></td></tr>
+      <tr><td><code>gen_ai.provider.name</code></td><td>Required. Replaces older <code>gen_ai.system</code>. Enum: <code>openai</code>, <code>anthropic</code>, <code>azure.ai.openai</code>, <code>azure.ai.inference</code>, <code>aws.bedrock</code>, <code>cohere</code>, <code>deepseek</code>, <code>gcp.gemini</code>, <code>gcp.gen_ai</code>, <code>gcp.vertex_ai</code>, <code>groq</code>, <code>ibm.watsonx.ai</code>, <code>mistral_ai</code>, <code>moonshot_ai</code>, <code>perplexity</code>, <code>x_ai</code></td></tr>
+      <tr><td><code>gen_ai.request.model</code> / <code>.response.model</code></td><td>requested vs responding model</td></tr>
+      <tr><td><code>gen_ai.usage.input_tokens</code> / <code>.output_tokens</code></td><td>prompt / completion tokens</td></tr>
+      <tr><td><code>gen_ai.usage.cache_creation.input_tokens</code> / <code>.cache_read.input_tokens</code></td><td>cache write / read</td></tr>
+      <tr><td><code>gen_ai.usage.reasoning.output_tokens</code></td><td>reasoning tokens</td></tr>
+      <tr><td><code>gen_ai.request.{temperature,top_p,top_k,max_tokens,seed,stream,…}</code></td><td>request params</td></tr>
+      <tr><td><code>gen_ai.request.reasoning.level</code></td><td>effort level (e.g. Anthropic <code>output_config.effort</code>)</td></tr>
+      <tr><td><code>gen_ai.response.id</code> / <code>.finish_reasons</code> / <code>.time_to_first_chunk</code></td><td>response metadata + TTFT</td></tr>
+      <tr><td><code>gen_ai.conversation.id</code></td><td>session/thread id</td></tr>
+      <tr><td><code>gen_ai.output.type</code></td><td><code>text</code> / <code>json</code> / <code>image</code> / <code>speech</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p><b>Agent &amp; tool spans</b> (the agentic additions): <span class="cf cf-h">High</span></p>
+  <ul>
+    <li><b>Agent:</b> <code>gen_ai.agent.id</code>, <code>gen_ai.agent.name</code>, <code>gen_ai.agent.description</code>, <code>gen_ai.agent.version</code></li>
+    <li><b>Tool:</b> <code>gen_ai.tool.name</code> (Required), <code>gen_ai.tool.call.id</code>, <code>gen_ai.tool.type</code> (<code>function</code>/<code>web_search</code>/<code>code_interpreter</code>), <code>gen_ai.tool.description</code>, opt-in <code>gen_ai.tool.call.arguments</code>/<code>.result</code></li>
+    <li><b>Span names:</b> <code>create_agent {name}</code>, <code>invoke_agent {name}</code>, <code>execute_tool {tool.name}</code>, <code>plan {name}</code></li>
+  </ul>
+  <p><b>Metrics:</b> <code>gen_ai.client.token.usage</code> (histogram, <code>{token}</code>, with <code>gen_ai.token.type</code> = <code>input</code>/<code>output</code>), <code>gen_ai.client.operation.duration</code>, <code>.time_to_first_chunk</code>, <code>.time_per_output_chunk</code>, <code>gen_ai.server.{request.duration,time_per_output_token,time_to_first_token}</code>. <span class="cf cf-h">High</span></p>
+  <p><b>Content events</b> (opt-in, PII-flagged): <code>gen_ai.client.inference.operation.details</code>, plus <code>gen_ai.input.messages</code>, <code>gen_ai.output.messages</code>, <code>gen_ai.system_instructions</code>, <code>gen_ai.evaluation.result</code>. <span class="cf cf-h">High</span></p>
+  <div class="callout note">
+    <span class="ct">Support OpenInference as a second wire dialect</span>
+    <p>Phoenix's parallel convention bakes <strong>explicit USD cost attributes</strong> into spans (<code>llm.cost.prompt/.completion/.total</code> + <code>prompt_details.cache_read/.cache_write</code>, <code>completion_details.reasoning/.audio</code>), which <code>gen_ai.*</code> does not. Its 9 <code>openinference.span.kind</code> values (LLM/CHAIN/TOOL/RETRIEVER/EMBEDDING/AGENT/RERANKER/GUARDRAIL/EVALUATOR) are the richest kind taxonomy. <span class="cf cf-h">High</span></p>
+  </div>
+
+  <h3>3.4 &nbsp;Token-field normalization (a required adapter)</h3>
+  <p>Sources disagree on token field names and semantics. The adapter layer must normalize all of these to the canonical set in §3.2: <span class="cf cf-h">High</span></p>
+  <ul>
+    <li><b>Name split:</b> <code>input_tokens</code>/<code>output_tokens</code> (OTel, OpenAI Responses, Anthropic, LangChain, Claude SDK, AutoGen mapping) <b>vs</b> <code>prompt_tokens</code>/<code>completion_tokens</code> (OpenAI Chat Completions, CrewAI, AutoGen <code>RequestUsage</code>).</li>
+  </ul>
+  <div class="callout warn">
+    <span class="ct">⚠ The double-counting trap — subset vs additive</span>
+    <p>On <b>OpenAI and Google</b>, <code>cached_tokens</code>/<code>reasoning_tokens</code>/<code>thoughtsTokenCount</code> are <b>subsets already inside</b> the parent input/output total — <em>never add them on top</em>. On <b>Anthropic and Bedrock</b>, <code>input_tokens</code> is the <b>uncached remainder</b> — true prompt = <code>input_tokens + cache_read_input_tokens + cache_creation_input_tokens</code>, and you <em>must add them back</em>. Get this backwards and you mis-bill every cached request. The OTel Anthropic convention encodes exactly this normalization rule.</p>
+  </div>
+  <ul><li><b>Reasoning/thinking tokens bill as output</b> on every provider and are invisible in the response text — visible output length ≠ billed output.</li></ul>
+
+  <!-- 4 -->
+  <h2 id="s4"><span class="h2num">4</span>The cost engine</h2>
+
+  <h3>4.1 &nbsp;The 3-tier fallback (industry-standard recipe)</h3>
+  <p>Langfuse documents it most explicitly; LiteLLM/Phoenix/Datadog implement variants. <span class="cf cf-h">High</span></p>
+  <ol class="big">
+    <li><b>Use directly-ingested USD cost</b> if the source provides it (gateway or provider returned cost). Most accurate.</li>
+    <li><b>Else: token counts × per-model price map.</b> The price map is the core asset.</li>
+    <li><b>Else: tokenize the text yourself</b> (tiktoken <code>o200k_base</code>/<code>cl100k_base</code>, Claude tokenizer) then price.</li>
+  </ol>
+  <div class="callout note">
+    <span class="ct">Two hard rules</span>
+    <p><b>1. Snapshot the price at ingestion time</b> so historical costs stay stable when prices change. Store the rate used, not just the cost. <span class="cf cf-h">High</span></p>
+    <p><b>2. Separate <em>estimated</em> per-event cost from <em>reconciled</em> billing cost as two distinct layers.</b> Gateways label token-derived cost an estimate; FinOps tools reconcile against provider billing APIs. Show both and surface the delta. <span class="cf cf-h">High</span></p>
+  </div>
+
+  <h3>4.2 &nbsp;The price catalog — the core maintained asset</h3>
+  <ul>
+    <li><b>De-facto public price map:</b> LiteLLM's <code>model_prices_and_context_window.json</code> — per model: <code>input_cost_per_token</code>, <code>output_cost_per_token</code>, <code>cache_creation_input_token_cost</code>, <code>cache_read_input_token_cost</code>, <code>output_cost_per_reasoning_token</code>, capability flags, <code>mode</code>. <b>Fork/track it as the seed catalog.</b> <span class="cf cf-h">High</span></li>
+    <li><b>Key the catalog on far more than <code>(model, tokens)</code></b> — a composite key: <code>(model × token-category × service_tier × context-tier × modality × batch/fast/geo flags × deployment-type × region)</code>. See §5.</li>
+    <li><b>Date-stamp and version every rate</b> — introductory prices (e.g. Anthropic Sonnet 5 intro $2/$10 through 2026-08-31), promo windows, new cache-write charges. Historical recompute needs the rate <em>in effect at the time</em>. <span class="cf cf-h">High</span></li>
+  </ul>
+
+  <h3>4.3 &nbsp;Where pricing data actually comes from</h3>
+  <p>The single biggest maintenance asymmetry in the whole system: <span class="cf cf-h">High</span></p>
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th>Provider</th><th>Machine-readable pricing API?</th><th>Realized-cost API returns $?</th></tr></thead>
+    <tbody>
+      <tr><td><b>OpenAI</b></td><td>❌ No — human page + <code>.md</code>/<code>llms.txt</code> only</td><td>✅ Costs API (daily)</td></tr>
+      <tr><td><b>Anthropic</b></td><td>❌ No — page only</td><td>✅ cost_report (daily; <b>excludes Priority Tier</b>)</td></tr>
+      <tr><td><b>Google</b></td><td>✅ <b>Cloud Billing Catalog API</b> (<code>…/v1/services/{id}/skus</code> — tiered rates, regions, <code>pricingExpression.tieredRates[]</code>)</td><td>✅ BigQuery billing export (~1-day lag)</td></tr>
+      <tr><td><b>Azure</b></td><td>✅ <b>Retail Prices API</b> (<code>prices.azure.com/api/retail/prices</code> — public, unauth, joins on <code>meterId</code>)</td><td>✅ Cost Management Query API</td></tr>
+      <tr><td><b>AWS Bedrock</b></td><td>✅ <b>Price List API</b> (<code>GetProducts</code>, ServiceCode <code>AmazonBedrock</code>; bulk files, no auth)</td><td>✅ Cost Explorer / CUR 2.0</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="callout note"><span class="ct">Implication</span><p>The three clouds let you auto-sync an effective-dated, per-region, per-SKU rate table programmatically — wire those up. OpenAI and Anthropic have <b>no pricing API</b>, so their catalog must be hand-curated/scraped and date-stamped. For all five, use the realized-cost API as reconciliation truth and the response <code>usage</code> for live per-request attribution.</p></div>
+
+  <!-- 5 -->
+  <h2 id="s5"><span class="h2num">5</span>Cost-engine gotchas (the load-bearing list)</h2>
+  <p>Every one of these breaks naive <code>tokens × rate</code>. A serious tracker handles all of them. <span class="cf cf-h">High</span> unless noted.</p>
+  <ol class="big">
+    <li><b>Subset vs additive token decomposition</b> (see §3.4) — the #1 mispricing bug.</li>
+    <li><b>One request has multiple input rates simultaneously</b> — base, cache-read (~0.1×), cache-write (1.25× for 5m / 2× for 1h on Anthropic; free on some models, charged on newer like GPT-5.6 and Azure gpt-5.6). Model each token category as its own priced line item.</li>
+    <li><b>Reasoning/thinking tokens bill at output rate</b> on every provider.</li>
+    <li><b>Batch API = ~50% off everywhere</b> — but with feature restrictions (no caching/tools in batch on Bedrock/Google). Key the rate on the batch flag/service tier.</li>
+    <li><b>Tiered / context-length pricing applies to the <em>whole request</em></b> once the prompt crosses a threshold (Google Pro &gt;200K, Bedrock Sonnet 1M &gt;200K, OpenAI long-context column) — not just the tokens above it.</li>
+    <li><b>Modality matters</b> — audio/image/video priced differently within one model, sometimes per-minute/per-second/per-image, not per token. Use the per-modality breakdowns.</li>
+    <li><b>Per-call tool surcharges stack on top of tokens</b> — web search (~$10/1k calls), file search, code interpreter/execution (per session or per hour). Some errored searches are free.</li>
+    <li><b>Non-token billing regimes coexist</b> — Azure PTU and AWS Provisioned Throughput bill <b>per hour regardless of tokens</b>; fine-tuned hosting is hourly; reservations amortize. The catalog needs a <code>pricing_mode</code> (<code>per_token</code> | <code>per_hour</code> | <code>per_unit</code> | <code>per_request</code>).</li>
+    <li><b>Deployment-type / region / service-tier / data-residency multipliers</b> — same model + tokens bills differently: Azure Standard vs GlobalStandard vs DataZone; AWS per-region; Anthropic <code>inference_geo:"us"</code> = 1.1×. Anthropic Managed Agents add <b>$0.08/session-hour</b>; Claude fast mode is flat $10/$50 per MTok.</li>
+    <li><b>Tokenizer changes shift cost at constant rates</b> — Claude 4.7+ produces <b>~30% more tokens</b> for the same text. Re-baseline per model.</li>
+    <li><b>Third-party model pricing is set by the cloud, not the vendor</b> (Bedrock, Foundry) and varies by region — never reuse first-party list prices for a cloud-hosted model.</li>
+    <li><b>Reporting APIs return dollars but lag and aggregate</b> (daily/per-usage-type). Per-request attribution needs invocation logs or your own <code>usage</code>-based estimate reconciled against the billing feed. <b>Anthropic's cost_report excludes Priority Tier.</b></li>
+    <li><b>Provider-specific response quirks</b> — Azure injects content-filter blocks + returns <b>HTTP 400 on a filtered prompt</b>; Anthropic splits streaming usage across <code>message_start</code> and <code>message_delta</code>; OpenAI Chat vs Responses and Bedrock Converse vs InvokeModel each expose <b>two different usage schemas</b>.</li>
+    <li><b>Date-effective pricing</b> — historical recompute must use the rate in effect at event time. Version and date-stamp the catalog.</li>
+    <li><b>Coarse surfaces don't speak tokens</b> — UiPath = "AI Units" (GenAI activity = 1–2 units); Copilot = premium requests × per-model multiplier ($0.04/req overage); only Cursor and Claude Code expose real tokens + spend. Needs a per-<code>granularity</code> pricing path.</li>
+  </ol>
+
+  <!-- 6 -->
+  <h2 id="s6"><span class="h2num">6</span>FinOps: cost allocation, attribution &amp; efficiency</h2>
+
+  <h3>6.1 &nbsp;Adopt FOCUS for the cost/billing layer</h3>
+  <p><b>FOCUS (FinOps Open Cost &amp; Usage Specification)</b> normalizes billing across vendors and — as of <b>v1.2 (2025-05-29)</b> — added virtual-currency lifecycle tracking for <b>tokens and credits</b>, the concrete entry point for AI billing (latest v1.4, 2026-06-04). AWS/Azure/GCP/OCI all publish FOCUS exports. <span class="cf cf-h">High</span>; exact dates <span class="cf cf-m">Medium</span></p>
+  <p>Adopt these FOCUS column names for the reconciled-cost layer:</p>
+  <ul>
+    <li><code>ConsumedQuantity</code> / <code>ConsumedUnit</code> — e.g. tokens, AI-units</li>
+    <li><code>PricingQuantity</code> / <code>PricingUnit</code></li>
+    <li><code>BilledCost</code> / <code>EffectiveCost</code> / <code>ListCost</code> / <code>ContractedCost</code></li>
+    <li><code>ListUnitPrice</code> / <code>ContractedUnitPrice</code>, <code>SkuPriceId</code></li>
+  </ul>
+
+  <h3>6.2 &nbsp;Allocation dimensions &amp; tag-free attribution</h3>
+  <ul>
+    <li>FinOps allocation taxonomy: <b>Project, Environment, Workload, Team, Cost Center, Usage Type</b>. AI's hard part is "identifying the consumer of the model output." Showback-first is recommended. <span class="cf cf-h">High</span></li>
+    <li><b>Tag-free / dimension-based allocation is the frontier</b> (CloudZero, Finout): allocate 100% of a shared endpoint's cost to teams/features/customers/users <em>without</em> requiring upstream tags — critical for the agentic era where many agents share one endpoint. Build allocation to work from captured span dimensions (user_id, agent.id, session, MCP session) even when the caller didn't tag. <span class="cf cf-h">High</span></li>
+  </ul>
+
+  <h3>6.3 &nbsp;Efficiency metrics — two distinct layers</h3>
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th>Layer</th><th>What it measures</th><th>How</th></tr></thead>
+    <tbody>
+      <tr><td><b>Operational efficiency</b><br><span style="color:var(--ink-faint)">cheap, auto from spans</span></td><td>Latency, <b>TTFT</b>, tokens/sec, token counts, error/success rate, throughput; cache hit rate + cost/time saved; reliability signals (retry, fallback, load-balance)</td><td>Derived directly from spans + gateway metadata <span class="cf cf-h">High</span></td></tr>
+      <tr><td><b>Unit economics</b><br><span style="color:var(--ink-faint)">the FinOps story</span></td><td>Resource: <b>cost per token / inference / API call.</b> Outcome: <b>cost per assist, per agent action, per case deflected, per outcome</b> — the metric that matters in the agentic era and that no gateway computes for you</td><td>Cost ÷ business unit <span class="cf cf-h">High</span></td></tr>
+      <tr><td><b>Quality</b><br><span style="color:var(--ink-faint)">separate layer, needs a judge</span></td><td>A generic <b>"score"</b> object (name + value: numeric/categorical/boolean) on a span/trace, from LLM-as-judge, code evaluators, human annotation, or end-user feedback</td><td>Externally computed, then attached <span class="cf cf-h">High</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="callout note"><span class="ct">Positioning</span><p><b>Be the score <em>aggregator</em>, not the eval engine</b> (Helicone's stance). Ingest externally-computed scores from any framework via a <code>POST .../score</code> endpoint; don't own the judge. This keeps the tracker framework-agnostic and avoids competing with the eval platforms.</p></div>
+
+  <!-- 7 -->
+  <h2 id="s7"><span class="h2num">7</span>Ingesting from closed / coarse surfaces (adapters, not proxies)</h2>
+  <p>These surfaces need dedicated pull-adapters. Fidelity varies enormously. <span class="cf cf-h">High</span> unless noted.</p>
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th>Surface</th><th>Mechanism</th><th>Token-level?</th><th>Key endpoint / signal</th></tr></thead>
+    <tbody>
+      <tr><td><b>Cursor</b></td><td>Admin API (HTTP Basic, key as username), base <code>api.cursor.com</code></td><td>✅ <b>Yes</b></td><td><code>POST /teams/filtered-usage-events</code> → per-event <code>model</code>, <code>tokenUsage{inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens, totalCents}</code>, <code>chargedCents</code>; <code>POST /teams/spend</code>; <code>POST /teams/daily-usage-data</code></td></tr>
+      <tr><td><b>Claude Code</b></td><td>(a) OTel client-side: <code>CLAUDE_CODE_ENABLE_TELEMETRY=1</code>. (b) Anthropic Admin API server-side (authoritative)</td><td>✅ <b>Yes (both)</b></td><td>metric <code>claude_code.token.usage</code> (attrs <code>type</code>=input/output/cacheRead/cacheCreation, <code>model</code>), <code>claude_code.cost.usage</code>; <code>GET /v1/organizations/usage_report/messages</code>; <code>…/cost_report</code></td></tr>
+      <tr><td><b>GitHub Copilot</b></td><td>Metrics API (transitioning to report-download, API version <code>2026-03-10</code>) + billing/seats</td><td>❌ <b>No tokens anywhere</b></td><td><code>GET /orgs/{org}/copilot/metrics</code> (28-day, engagement only); <code>…/copilot/billing/seats</code> → <code>last_activity_at</code>. Cost lever = <b>premium requests</b> (×per-model multiplier, $0.04/req overage)</td></tr>
+      <tr><td><b>UiPath</b></td><td>AI Units via licensing + Insights dashboards (AI Trust Layer meters embedded LLM work)</td><td>❌ <b>No</b> (abstracted to AI units)</td><td>GenAI activity = 1 unit (2 w/ Context Grounding); Automation Cloud → Admin → Licenses / Insights. No confirmed per-token REST API</td></tr>
+      <tr><td><b>Automation Anywhere</b></td><td>AI Governance dashboard + AI prompt log + audit logs</td><td>Partial/unconfirmed <span class="cf cf-l">Low</span></td><td>AI Governance; likely via Control Room APIs / audit-log export</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="callout note"><span class="ct">Design consequence</span><p>For token-less surfaces (Copilot, UiPath, AA), record coarse <code>units_consumed</code> events with <code>granularity</code> set accordingly and price them via the per-granularity path (§5.15). Don't force these into the token model.</p></div>
+
+  <h3>7.1 &nbsp;MCP — an interception point, not a usage source</h3>
+  <div class="callout warn"><span class="ct">⚠ MCP carries no native usage field</span><p><code>CallToolResult</code> has only <code>content</code>/<code>structuredContent</code>/<code>isError</code>/<code>_meta</code>; <code>CreateMessageResult</code> (sampling) returns <code>model</code>/<code>stopReason</code>/<code>role</code>/<code>content</code> but <b>no <code>usage</code></b>. <span class="cf cf-h">High</span></p></div>
+  <ul>
+    <li><b>Derive</b> token/cost from the underlying model call (the LLM span behind the tool), and <b>correlate</b> via <code>mcp.session.id</code> + W3C trace context propagated in <code>params._meta</code>.</li>
+    <li><b>OTel MCP conventions exist</b> (same repo): <code>mcp.method.name</code> (e.g. <code>tools/call</code>), <code>mcp.session.id</code>, <code>mcp.resource.uri</code>, <code>mcp.protocol.version</code>; metrics <code>mcp.client/server.operation.duration</code>. MCP tool-call spans map cleanly to GenAI <code>execute_tool</code> spans. <span class="cf cf-h">High</span></li>
+    <li><b>Two roles for the tracker w.r.t. MCP:</b> (1) <b>as an MCP server</b> — expose usage queries as MCP <em>tools</em> (with <code>outputSchema</code>) and datasets as <em>resources</em> (with <code>resources/subscribe</code> for push) so agents can query their own spend live; (2) <b>as an MCP proxy/interceptor</b> — MCP is transport-agnostic JSON-RPC 2.0, so a gateway can observe all traffic and annotate <code>_meta</code> (Docker MCP Gateway is the first-party example). <span class="cf cf-h">High</span></li>
+  </ul>
+
+  <h3>7.2 &nbsp;Agent-framework hooks</h3>
+  <p>Wire adapters into each framework's native telemetry rather than re-instrumenting: <span class="cf cf-h">High</span></p>
+  <ul>
+    <li><b>LangChain/LangSmith:</b> <code>BaseCallbackHandler</code> (<code>on_llm_end</code> → <code>LLMResult</code>), <code>AIMessage.usage_metadata</code>; LangSmith exports OTel (<code>LANGSMITH_OTEL_ENABLED=true</code>).</li>
+    <li><b>OpenAI Agents SDK:</b> auto spans + <code>Usage</code> via <code>context_wrapper.usage</code>; proprietary exporter, OTel only via <code>add_trace_processor()</code>.</li>
+    <li><b>Claude Agent SDK:</b> <code>ResultMessage.usage</code> (input/output/cache_creation/cache_read), <code>total_cost_usd</code>, <code>model_usage</code> (whole-tree).</li>
+    <li><b>CrewAI:</b> <code>UsageMetrics</code> (incl. <code>cached_prompt_tokens</code>, <code>reasoning_tokens</code>); OTel-based, on by default.</li>
+    <li><b>AutoGen:</b> emits GenAI conventions natively (<code>execute_tool</code>/<code>create_agent</code>/<code>invoke_agent</code> spans); <code>RequestUsage</code>.</li>
+    <li><b>LlamaIndex:</b> <code>TokenCountingHandler</code>, <code>Dispatcher</code>/<code>BaseEventHandler</code>; OpenInference instrumentation.</li>
+  </ul>
+
+  <!-- 8 -->
+  <h2 id="s8"><span class="h2num">8</span>Recommended architecture for the tracker</h2>
+
+  <h3>8.1 &nbsp;Component diagram</h3>
+  <pre><code>┌─────────────────────── INGESTION (all four archetypes) ───────────────────────┐
+│  OTLP receiver          Proxy/gateway mode      Usage-event API      Pull adapters │
+│  (gen_ai.* +            (optional inline;       (CloudEvents 1.0     (billing APIs, │
+│   OpenInference)        OpenAI-compat)          for coarse events)   Cursor, Copilot,│
+│                                                                       UiPath, clouds)│
+└───────────────┬───────────────┬──────────────────┬───────────────────┬────────────┘
+                │               │                  │                   │
+                ▼               ▼                  ▼                   ▼
+        ┌──────────────────────────────────────────────────────────────────┐
+        │  NORMALIZATION LAYER                                               │
+        │  • token-field normalizer (subset-vs-additive, name aliases)      │
+        │  • schema mapper → canonical Session→Trace→Span (§3.2)            │
+        │  • granularity tagger (token|credit|seat|request)                 │
+        └───────────────────────────────┬──────────────────────────────────┘
+                                         ▼
+        ┌──────────────────────────────────────────────────────────────────┐
+        │  COST ENGINE (3-tier: ingested → price-map → tokenize)            │
+        │  • composite-key price catalog (fork LiteLLM json), date-stamped   │
+        │  • per-granularity pricing paths                                   │
+        │  • estimated-cost layer  ←────reconcile────→  billing-truth layer  │
+        └───────────────────────────────┬──────────────────────────────────┘
+                                         ▼
+        ┌──────────────────────────────────────────────────────────────────┐
+        │  STORAGE:  events/spans → ClickHouse (analytics)                   │
+        │            catalog/allocation/billing state → Postgres             │
+        │            ingest stream → Kafka (optional, high volume)           │
+        └───────────────────────────────┬──────────────────────────────────┘
+                                         ▼
+        ┌──────────────────────────────────────────────────────────────────┐
+        │  SERVING:  query API · FOCUS-column cost views · unit-economics    │
+        │            (cost/outcome) · score aggregation · MCP server face    │
+        │            · allocation (tag-free, dimension-based) · dashboards   │
+        └──────────────────────────────────────────────────────────────────┘</code></pre>
+  <p>Storage choice mirrors the field convergence: <b>ClickHouse</b> for high-volume event/trace analytics, <b>Postgres</b> for relational catalog/billing/entitlement state, <b>Kafka</b> for ingest streaming at volume. <span class="cf cf-h">High</span> — the pattern OpenMeter and Langfuse-class tools use.</p>
+
+  <h3>8.2 &nbsp;Six design principles</h3>
+  <ol class="big">
+    <li><b>Adopt OTel GenAI + OpenInference as the wire schema</b>, pin a version, plan for churn. OTLP is the primary neutral ingest path.</li>
+    <li><b>Offer all four ingestion modes</b> — OTLP (fidelity), proxy (zero-instrumentation breadth), usage-event/CloudEvents API (coarse + billing reconciliation), provider-billing-API pull (ground truth). Spanning all four is the differentiator.</li>
+    <li><b>Model the canonical Session→Trace→Span tree</b> with span <code>kind</code> first-class and extensible to agent/tool/retriever/guardrail/evaluator.</li>
+    <li><b>Build cost as a 3-tier engine</b> over a composite-key, date-stamped, multi-bucket price map; keep <b>estimated cost and reconciled billing cost as separate layers</b> and surface the delta.</li>
+    <li><b>Make "score" a generic attachable object</b> and stay framework-agnostic on evals; capture operational efficiency (latency/TTFT/cache/retry/fallback) automatically.</li>
+    <li><b>Tag-free, dimension-based allocation</b> for shared endpoints; unit economics up to <b>cost per outcome</b>.</li>
+  </ol>
+
+  <h3>8.3 &nbsp;Suggested build order (MVP → full)</h3>
+  <ol class="big">
+    <li><b>MVP:</b> OTLP receiver (<code>gen_ai.*</code>) + canonical span store (ClickHouse) + 3-tier cost engine seeded from LiteLLM's price JSON. Covers every OTel-emitting gateway/framework on day one.</li>
+    <li><b>Provider reconciliation:</b> pull adapters for the three clouds' pricing APIs (Google Catalog, Azure Retail, AWS Price List) + realized-cost APIs (OpenAI Costs, Anthropic cost_report). Wire the estimated-vs-reconciled delta.</li>
+    <li><b>Coarse surfaces:</b> Cursor + Claude Code adapters (real tokens), then Copilot/UiPath (units/seats) with the per-granularity pricing path.</li>
+    <li><b>MCP face:</b> expose the tracker as an MCP server (usage-query tools + resources) so agents can read their own spend.</li>
+    <li><b>FinOps layer:</b> FOCUS-column cost views, tag-free allocation, cost-per-outcome unit economics.</li>
+    <li><b>Score aggregation:</b> generic score-ingest endpoint; framework-agnostic quality overlay.</li>
+  </ol>
+
+  <!-- 9 -->
+  <h2 id="s9"><span class="h2num">9</span>Open items to verify before shipping</h2>
+  <div class="callout warn"><span class="ct">⚠ Do not treat as settled</span><p>Carried from the research, flagged Medium/Low — re-verify against live sources.</p></div>
+  <ul>
+    <li><b>All dollar figures drift constantly</b> — pull live before displaying.</li>
+    <li>OTel GenAI conventions are <b>Development-stability</b>; attribute names may change between versions.</li>
+    <li>FOCUS exact version/date lineage; whether model/provider are first-class tag keys. <span class="cf cf-m">Medium</span></li>
+    <li>OpenAI <code>usage</code> audio/prediction sub-fields (reference page is JS-gated). <span class="cf cf-m">Medium</span></li>
+    <li>Anthropic streaming <code>message_start</code> null-field partition is prose-documented only. <span class="cf cf-m">Medium</span></li>
+    <li>Bedrock InvokeModel token headers, <code>amazon-bedrock-invocationMetrics</code> field names, exact CUR usage-type strings, <code>AmazonBedrock</code> service code — verify against live calls. <span class="cf cf-m">Medium</span>/<span class="cf cf-l">Low</span></li>
+    <li>Azure current <code>serviceName</code> filter string for AOAI meters. <span class="cf cf-m">Medium</span></li>
+    <li>GitHub Copilot per-model premium-request multiplier table — not captured verbatim. <span class="cf cf-m">Medium</span></li>
+    <li>UiPath / Automation Anywhere programmatic consumption endpoints (vs dashboard-only). <span class="cf cf-l">Low</span></li>
+    <li>Helicone OSS license &amp; streaming token handling; Lunary license &amp; self-host boundary. <span class="cf cf-l">Low</span></li>
+    <li>WebSearch was unavailable during research; "High" ratings lean on multiple agreeing vendor docs, not independent third parties.</li>
+  </ul>
+
+  <!-- 10 -->
+  <h2 id="s10"><span class="h2num">10</span>Reference index (primary sources)</h2>
+  <ul>
+    <li><b>OTel GenAI conventions:</b> <code>github.com/open-telemetry/semantic-conventions-genai</code></li>
+    <li><b>Price map to fork:</b> <code>github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json</code></li>
+    <li><b>FOCUS:</b> <code>focus.finops.org/what-is-focus/</code>, <code>/focus-columns/</code></li>
+    <li><b>FinOps for AI:</b> <code>finops.org/wg/finops-for-ai-overview/</code>, <code>/framework/capabilities/unit-economics/</code></li>
+    <li><b>Cloud pricing APIs:</b> Google <code>cloudbilling.googleapis.com/v1/services/{id}/skus</code>; Azure <code>prices.azure.com/api/retail/prices</code>; AWS Price List <code>GetProducts</code> (ServiceCode <code>AmazonBedrock</code>)</li>
+    <li><b>Realized-cost APIs:</b> OpenAI <code>/v1/organization/costs</code>; Anthropic <code>/v1/organizations/cost_report</code> + <code>/usage_report/messages</code>; Azure Cost Management Query API; GCP BigQuery billing export; AWS Cost Explorer / CUR 2.0</li>
+    <li><b>Closed surfaces:</b> Cursor <code>api.cursor.com</code> Admin API; Claude Code <code>code.claude.com/docs/en/monitoring-usage</code>; GitHub <code>docs.github.com/en/rest/copilot</code>; UiPath <code>docs.uipath.com/.../ai-units</code></li>
+    <li><b>MCP:</b> <code>modelcontextprotocol.io/specification/2025-06-18</code>; <code>docker/mcp-gateway</code></li>
+    <li><b>Provider usage-object shapes:</b> each provider's Messages/Chat API reference; the bundled <code>claude-api</code> skill for Claude usage/pricing specifics</li>
+  </ul>
+
+  <div class="footer">
+    AI Usage Tracker — Architecture Report · Compiled 2026-08-04 · Companion to <code>ARCHITECTURE.md</code> in the same folder.
+  </div>
+</main>
+</div>
+
+<script>
+  // Scroll-spy: highlight the active TOC entry
+  (function () {
+    var links = Array.prototype.slice.call(document.querySelectorAll('nav.toc a'));
+    var map = {};
+    links.forEach(function (a) { map[a.getAttribute('href').slice(1)] = a; });
+    var sections = links.map(function (a) { return document.getElementById(a.getAttribute('href').slice(1)); }).filter(Boolean);
+    var obs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) {
+          links.forEach(function (l) { l.classList.remove('active'); });
+          if (map[e.target.id]) map[e.target.id].classList.add('active');
+        }
+      });
+    }, { rootMargin: '0px 0px -75% 0px', threshold: 0 });
+    sections.forEach(function (s) { obs.observe(s); });
+  })();
+</script>
+</body>
+</html>

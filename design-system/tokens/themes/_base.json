@@ -1,0 +1,27 @@
+{
+  "$description": "BASE theme (decision B1: fully neutral/generic). Defines the complete default that every surface inherits. Brand tokens here are a professional neutral blue — NOT any specific company's brand. A tenant theme overrides only the keys in themes/_template.json and inherits everything else. This maps to the :root defaults in dist/tokens.css.",
+  "theme": {
+    "name": "base",
+    "mode-support": ["light", "dark"]
+  },
+  "brand": {
+    "$description": "The generic default brand ramp. Neutral, vendor-independent.",
+    "ramp": {
+      "50":"#eff6ff","100":"#dbeafe","200":"#bfdbfe","300":"#93c5fd","400":"#60a5fa",
+      "500":"#3b82f6","600":"#2563eb","700":"#1d4ed8","800":"#1e40af","900":"#1e3a8a","950":"#172554"
+    },
+    "accent": null
+  },
+  "font": {
+    "display": "system-ui, -apple-system, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+    "sans":    "system-ui, -apple-system, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif"
+  },
+  "radius": {
+    "control": "10px",
+    "input": "3px"
+  },
+  "chart": {
+    "$description": "Inherits the generic validated template from ../chart-palette.json. Base does not override it.",
+    "palette": "inherit"
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "$description": "GENERIC, SWAPPABLE chart-palette TEMPLATE (decision B2). Ships the dataviz skill's validated default so charts are color-blind-safe out of the box. A tenant substitutes the categorical slots to match their brand and MUST re-run scripts/validate_palette.mjs (light AND dark) before shipping — the CI gate enforces this. Status is fixed and never themed. Chart chrome + categorical dark steps also drive dist/tokens.css chart-* vars.",
+  "meta": {
+    "source": "dataviz skill validated default (adopted 2026-07)",
+    "swap_procedure": "1) replace categorical.light/.dark slots with brand hues; 2) node scripts/validate_palette.mjs \"<light csv>\" --mode light; 3) --mode dark --surface <dark chart surface>; 4) fix any FAIL via snap-to-passing (hold hue, nudge lightness one step, re-run); 5) sub-3:1 contrast slots are legal ONLY if the chart ships direct labels or the table-view twin.",
+    "validated": {
+      "light": { "worst_adjacent_cvd_dE": 9.1, "worst_adjacent_normal_dE": 19.6, "note": "slots 3,4,5 sit sub-3:1 on the light surface -> relief rule (labels/table required)." },
+      "dark":  { "worst_adjacent_cvd_dE": 8.3, "worst_adjacent_normal_dE": 19.3 },
+      "all_pairs_cap": "Only the first 3 slots clear the all-pairs floors; scatter/bubble/choropleth/small-multiples cap at 3 series -> fold tail to 'Other' or facet."
+    }
+  },
+  "categorical": {
+    "$description": "8 fixed-order hues. Assign slots in sequence; NEVER cycle past 8 (fold to 'Other'/facet). Order is the CVD-safety mechanism — do not reorder without re-validating.",
+    "order": ["blue","orange","aqua","yellow","magenta","green","violet","red"],
+    "light": ["#2a78d6","#eb6834","#1baf7a","#eda100","#e87ba4","#008300","#4a3aa7","#e34948"],
+    "dark":  ["#3987e5","#d95926","#199e70","#c98500","#d55181","#008300","#9085e9","#e66767"]
+  },
+  "sequential": {
+    "$description": "One hue (blue), magnitude light->dark. Heatmaps/choropleths. Ordinal marks (funnel/tiers) must keep the surface-nearest step >=2:1 (light: no lighter than step 250; dark: no darker than step 600). Validate ramps with --ordinal, NOT the categorical checks.",
+    "hue": "blue",
+    "steps": {
+      "100":"#cde2fb","150":"#b7d3f6","200":"#9ec5f4","250":"#86b6ef","300":"#6da7ec",
+      "350":"#5598e7","400":"#3987e5","450":"#2a78d6","500":"#256abf","550":"#1c5cab",
+      "600":"#184f95","650":"#104281","700":"#0d366b"
+    }
+  },
+  "diverging": {
+    "$description": "Blue <-> red poles (warm/cool = opposite), equal steps per arm, gray midpoint that reads as 'nothing'.",
+    "low": "#2a78d6",
+    "high": "#e34948",
+    "mid": { "light": "#f0efec", "dark": "#383835" }
+  },
+  "status": {
+    "$description": "FIXED — never themed, deliberately distinct from categorical slots so a status color never impersonates a series. ALWAYS render with an icon + label (color never carries meaning alone). On the light surface warning+serious are sub-3:1 BY DESIGN — the icon+label pairing is the mitigation. Names map: good=success, warning=warn, critical=error.",
+    "good":     "#0ca30c",
+    "warning":  "#fab219",
+    "serious":  "#ec835a",
+    "critical": "#d03b3b",
+    "delta_good_text": { "light": "#006300", "dark": "#0ca30c" }
+  },
+  "chrome": {
+    "$description": "Chart-frame ink/lines. Same token NAMES in light+dark; values differ. Text never wears a data color — labels/axes/values use these ink tokens.",
+    "surface":       { "light": "#fcfcfb", "dark": "#1a1a19" },
+    "plane":         { "light": "#f9f9f7", "dark": "#0d0d0d" },
+    "ink_primary":   { "light": "#0b0b0b", "dark": "#ffffff" },
+    "ink_secondary": { "light": "#52514e", "dark": "#c3c2b7" },
+    "ink_muted":     { "light": "#898781", "dark": "#898781" },
+    "gridline":      { "light": "#e1e0d9", "dark": "#2c2c2a" },
+    "baseline":      { "light": "#c3c2b7", "dark": "#383835" },
+    "border":        { "light": "rgba(11,11,11,.10)", "dark": "rgba(255,255,255,.10)" },
+    "surface_gap_px": 2
+  }
+}

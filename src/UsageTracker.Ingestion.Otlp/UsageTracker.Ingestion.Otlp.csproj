@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- OTLP/OpenInference span mapping — the wire→canonical layer (Phase 2).
+       Depends only on Contracts + the normalizer; no HTTP, no storage, so the
+       mappers are pure and unit-testable, and reusable by any receiver transport. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>UsageTracker.Ingestion.Otlp</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\UsageTracker.Contracts\UsageTracker.Contracts.csproj" />
+    <ProjectReference Include="..\UsageTracker.Normalization\UsageTracker.Normalization.csproj" />
+  </ItemGroup>
+</Project>

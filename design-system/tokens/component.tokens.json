@@ -1,0 +1,67 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "$description": "COMPONENT layer — per-component tokens that consume ONLY the semantic layer (never primitives, never raw values). This is the seam a component styles against; regenerating primitives/semantics recomputes these without touching component code.",
+  "button": {
+    "primary": {
+      "bg":        { "$type": "color", "$value": "{color.brand.solid}" },
+      "bg-hover":  { "$type": "color", "$value": "{color.brand.solid-hover}" },
+      "bg-active": { "$type": "color", "$value": "{color.brand.solid-active}" },
+      "fg":        { "$type": "color", "$value": "{color.text.on-brand}" }
+    },
+    "secondary": {
+      "bg":       { "$type": "color", "$value": "transparent" },
+      "bg-hover": { "$type": "color", "$value": "{color.bg.subtle}" },
+      "fg":       { "$type": "color", "$value": "{color.text.primary}" },
+      "border":   { "$type": "color", "$value": "{color.border.default}" }
+    },
+    "radius":      { "$type": "dimension", "$value": "{radius.lg}" },
+    "pad-x":       { "$type": "dimension", "$value": "{space.5}" },
+    "pad-y":       { "$type": "dimension", "$value": "{space.3}" },
+    "font-weight": { "$type": "fontWeight", "$value": "{font.weight.semibold}" }
+  },
+  "card": {
+    "bg":     { "$type": "color", "$value": "{color.bg.surface}" },
+    "border": { "$type": "color", "$value": "{color.border.subtle}" },
+    "radius": { "$type": "dimension", "$value": "{radius.lg}" },
+    "shadow": { "$type": "shadow", "$value": "{shadow.2}" },
+    "pad":    { "$type": "dimension", "$value": "{space.6}" }
+  },
+  "input": {
+    "bg":           { "$type": "color", "$value": "{color.bg.surface}" },
+    "fg":           { "$type": "color", "$value": "{color.text.primary}" },
+    "border":       { "$type": "color", "$value": "{color.border.default}" },
+    "border-hover": { "$type": "color", "$value": "{color.border.strong}" },
+    "radius":       { "$type": "dimension", "$value": "{radius.xs}" },
+    "pad-x":        { "$type": "dimension", "$value": "{space.4}" },
+    "pad-y":        { "$type": "dimension", "$value": "{space.3}" },
+    "placeholder":  { "$type": "color", "$value": "{color.text.muted}" }
+  },
+  "table": {
+    "header-bg": { "$type": "color", "$value": "{color.bg.subtle}" },
+    "header-fg": { "$type": "color", "$value": "{color.text.secondary}" },
+    "row-hover": { "$type": "color", "$value": "{color.bg.subtle}", "$description": "Background swap only — never a transform/shadow that shifts adjacent rows." },
+    "border":    { "$type": "color", "$value": "{color.border.subtle}" },
+    "cell-pad-x":{ "$type": "dimension", "$value": "{space.5}" },
+    "cell-pad-y":{ "$type": "dimension", "$value": "{space.3}" },
+    "row-flash": { "$type": "color", "$value": "{color.brand.50}", "$extensions": { "mode": { "dark": "rgba(37,99,235,.22)" } }, "$description": "Changed-row highlight for live-updating data." }
+  },
+  "stat": {
+    "label-fg":     { "$type": "color", "$value": "{color.text.secondary}" },
+    "value-fg":     { "$type": "color", "$value": "{color.text.primary}" },
+    "value-size":   { "$type": "dimension", "$value": "{font.size.3xl}" },
+    "value-weight": { "$type": "fontWeight", "$value": "{font.weight.semibold}" },
+    "hero-size":    { "$type": "dimension", "$value": "{font.size.5xl}", "$description": ">=48px, system sans, exactly one hero per view." }
+  },
+  "chip": {
+    "radius": { "$type": "dimension", "$value": "{radius.full}" },
+    "pad-x":  { "$type": "dimension", "$value": "{space.3}" },
+    "pad-y":  { "$type": "dimension", "$value": "{space.1}" },
+    "font":   { "$type": "dimension", "$value": "{font.size.xs}" }
+  },
+  "app": {
+    "sidebar-bg":     { "$type": "color", "$value": "{color.bg.surface}" },
+    "sidebar-border": { "$type": "color", "$value": "{color.border.subtle}" },
+    "topbar-bg":      { "$type": "color", "$value": "{color.bg.surface}" },
+    "topbar-border":  { "$type": "color", "$value": "{color.border.subtle}" }
+  }
+}

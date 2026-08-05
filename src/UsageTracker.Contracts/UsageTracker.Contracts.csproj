@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The CONTRACT package: interfaces + DTOs only, no implementations.
+       Every other module depends on this and never on each other (the
+       modularity throughline from PROJECT_CONTEXT.md §5). Semantically
+       versioned; a breaking change here is a major bump. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>UsageTracker.Contracts</RootNamespace>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+</Project>

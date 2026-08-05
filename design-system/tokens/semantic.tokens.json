@@ -1,0 +1,58 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "$description": "SEMANTIC layer — role tokens that ALIAS primitives. Every value is a {reference}, never a raw hex (the hard rule). Carries light + dark modes: the DTCG '$extensions.mode' object holds the dark alias; the Style Dictionary build emits the light value to :root and the dark value to the dark scopes in dist/tokens.css. Components consume ONLY this layer + component.tokens.json.",
+  "color": {
+    "$type": "color",
+    "bg": {
+      "canvas":        { "$value": "{color.gray.50}",  "$extensions": { "mode": { "dark": "{color.gray.950}" } } },
+      "surface":       { "$value": "{color.white}",     "$extensions": { "mode": { "dark": "{color.gray.900}" } } },
+      "surface-raised":{ "$value": "{color.white}",     "$extensions": { "mode": { "dark": "{color.gray.800}" } }, "$description": "Raised surfaces go LIGHTER than base in dark (tonal elevation), not darker." },
+      "surface-sunken":{ "$value": "{color.gray.100}",  "$extensions": { "mode": { "dark": "{color.gray.950}" } } },
+      "subtle":        { "$value": "{color.gray.100}",  "$extensions": { "mode": { "dark": "{color.gray.800}" } }, "$description": "Row/interactive hover fill." },
+      "muted":         { "$value": "{color.gray.200}",  "$extensions": { "mode": { "dark": "{color.gray.700}" } } },
+      "inverse":       { "$value": "{color.gray.900}",  "$extensions": { "mode": { "dark": "{color.gray.100}" } } },
+      "scrim":         { "$value": "rgba(2,6,23,.45)",  "$extensions": { "mode": { "dark": "rgba(0,0,0,.60)" } }, "$description": "Modal scrim 40-60% to isolate foreground in both themes." }
+    },
+    "text": {
+      "primary":   { "$value": "{color.gray.900}", "$extensions": { "mode": { "dark": "{color.gray.50}" } } },
+      "secondary": { "$value": "{color.gray.600}", "$extensions": { "mode": { "dark": "{color.gray.300}" } }, "$description": "Must clear 3:1 on surface in BOTH modes." },
+      "muted":     { "$value": "{color.gray.500}", "$extensions": { "mode": { "dark": "{color.gray.400}" } }, "$description": "Must clear 4.5:1 on surface in BOTH modes." },
+      "disabled":  { "$value": "{color.gray.400}", "$extensions": { "mode": { "dark": "{color.gray.600}" } } },
+      "inverse":   { "$value": "{color.white}",    "$extensions": { "mode": { "dark": "{color.gray.900}" } } },
+      "on-brand":  { "$value": "{color.white}" },
+      "link":      { "$value": "{color.brand.700}", "$extensions": { "mode": { "dark": "{color.brand.300}" } } }
+    },
+    "border": {
+      "subtle":  { "$value": "{color.gray.200}",  "$extensions": { "mode": { "dark": "{color.gray.800}" } } },
+      "default": { "$value": "{color.gray.300}",  "$extensions": { "mode": { "dark": "{color.gray.700}" } }, "$description": "Must stay visible in BOTH themes (a classic dark-mode pitfall)." },
+      "strong":  { "$value": "{color.gray.400}",  "$extensions": { "mode": { "dark": "{color.gray.600}" } } },
+      "focus":   { "$value": "{color.brand.600}", "$extensions": { "mode": { "dark": "{color.brand.400}" } } },
+      "brand":   { "$value": "{color.brand.600}", "$extensions": { "mode": { "dark": "{color.brand.400}" } } }
+    },
+    "brand": {
+      "solid":        { "$value": "{color.brand.600}", "$extensions": { "mode": { "dark": "{color.brand.600}" } } },
+      "solid-hover":  { "$value": "{color.brand.700}", "$extensions": { "mode": { "dark": "{color.brand.500}" } } },
+      "solid-active": { "$value": "{color.brand.800}", "$extensions": { "mode": { "dark": "{color.brand.400}" } } },
+      "subtle":       { "$value": "{color.brand.50}",  "$extensions": { "mode": { "dark": "{color.brand.950}" } } },
+      "text":         { "$value": "{color.brand.700}", "$extensions": { "mode": { "dark": "{color.brand.300}" } } }
+    },
+    "feedback": {
+      "success-subtle": { "$value": "{color.green.50}",  "$extensions": { "mode": { "dark": "rgba(22,163,74,.15)" } } },
+      "success-fg":     { "$value": "{color.green.700}", "$extensions": { "mode": { "dark": "{color.green.400}" } } },
+      "success-solid":  { "$value": "{color.green.600}" },
+      "warning-subtle": { "$value": "{color.amber.50}",  "$extensions": { "mode": { "dark": "rgba(217,119,6,.16)" } } },
+      "warning-fg":     { "$value": "{color.amber.700}", "$extensions": { "mode": { "dark": "{color.amber.300}" } } },
+      "warning-solid":  { "$value": "{color.amber.600}" },
+      "danger-subtle":  { "$value": "{color.red.50}",    "$extensions": { "mode": { "dark": "rgba(220,38,38,.16)" } } },
+      "danger-fg":      { "$value": "{color.red.600}",   "$extensions": { "mode": { "dark": "{color.red.400}" } } },
+      "danger-solid":   { "$value": "{color.red.600}" },
+      "info-subtle":    { "$value": "{color.brand.50}",  "$extensions": { "mode": { "dark": "{color.brand.950}" } } },
+      "info-fg":        { "$value": "{color.brand.700}", "$extensions": { "mode": { "dark": "{color.brand.300}" } } }
+    }
+  },
+  "focus": {
+    "ring-width":  { "$type": "dimension", "$value": "2px" },
+    "ring-offset": { "$type": "dimension", "$value": "2px" },
+    "ring-color":  { "$type": "color", "$value": "{color.brand.600}", "$extensions": { "mode": { "dark": "{color.brand.400}" } } }
+  }
+}

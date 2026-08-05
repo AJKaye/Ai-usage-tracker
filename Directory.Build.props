@@ -1,0 +1,15 @@
+<Project>
+  <!-- Shared build properties for every project in the solution.
+       Each .csproj still declares its own <TargetFramework>; everything else is
+       centralized here so a change applies solution-wide (mirrors the design
+       system's "change once" philosophy at the build level). -->
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <!-- warnings-as-errors is applied in CI (-warnaserror), not locally, so a
+         local dev build isn't blocked by analyzer nits mid-edit. See .github/workflows/ci.yml -->
+  </PropertyGroup>
+</Project>

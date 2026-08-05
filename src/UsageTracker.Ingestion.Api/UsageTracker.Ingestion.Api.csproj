@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>UsageTracker.Ingestion.Api</RootNamespace>
+    <!-- The downloadable artifact is named usage-tracker(.exe). Set here (not via
+         -p: at publish) so it doesn't collide with project-graph name resolution. -->
+    <AssemblyName>usage-tracker</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\UsageTracker.Contracts\UsageTracker.Contracts.csproj" />
+    <ProjectReference Include="..\UsageTracker.Normalization\UsageTracker.Normalization.csproj" />
+    <ProjectReference Include="..\UsageTracker.Cost\UsageTracker.Cost.csproj" />
+    <ProjectReference Include="..\UsageTracker.Storage.InMemory\UsageTracker.Storage.InMemory.csproj" />
+    <ProjectReference Include="..\UsageTracker.Storage.Sqlite\UsageTracker.Storage.Sqlite.csproj" />
+    <ProjectReference Include="..\UsageTracker.Ingestion.Otlp\UsageTracker.Ingestion.Otlp.csproj" />
+  </ItemGroup>
+</Project>

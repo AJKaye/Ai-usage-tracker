@@ -1,0 +1,76 @@
+name: CI
+
+# Enterprise CI baseline for the vertical slice. Extends over the phases with
+# SBOM/scan/sign (Phase 0), visual-regression + axe (Phase 8). See DEVELOPMENT_PLAN.md.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  dotnet:
+    name: Build + test (.NET)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Restore
+        run: dotnet restore AiUsageTracker.slnx
+      - name: Build (warnings as errors — includes NU1903 vuln gate)
+        run: dotnet build AiUsageTracker.slnx -c Release --no-restore -warnaserror
+      - name: Test
+        run: dotnet test AiUsageTracker.slnx -c Release --no-build --verbosity normal
+
+  # Publishes the zero-infra downloadable executable for every major platform.
+  # This is the "runs on as many machines as possible" deliverable — one
+  # self-contained file per OS/arch, no runtime/Docker/admin needed on the target.
+  publish-exe:
+    name: Publish self-contained single-file (${{ matrix.rid }})
+    needs: dotnet
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - { os: windows-latest, rid: win-x64 }
+          - { os: windows-latest, rid: win-arm64 }
+          - { os: ubuntu-latest,  rid: linux-x64 }
+          - { os: ubuntu-latest,  rid: linux-arm64 }
+          - { os: macos-latest,   rid: osx-arm64 }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Publish usage-tracker (${{ matrix.rid }})
+        run: >
+          dotnet publish src/UsageTracker.Ingestion.Api/UsageTracker.Ingestion.Api.csproj
+          -c Release -r ${{ matrix.rid }} --self-contained true
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+          -o publish/${{ matrix.rid }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: usage-tracker-${{ matrix.rid }}
+          path: |
+            publish/${{ matrix.rid }}/usage-tracker*
+            !publish/${{ matrix.rid }}/*.pdb
+
+  design-system:
+    name: Design-system gates (palette + tokens)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Palette CVD/contrast gate (default template, light + dark)
+        run: |
+          node design-system/scripts/validate_palette.mjs "#2a78d6,#eb6834,#1baf7a,#eda100,#e87ba4,#008300,#4a3aa7,#e34948" --mode light
+          node design-system/scripts/validate_palette.mjs "#3987e5,#d95926,#199e70,#c98500,#d55181,#008300,#9085e9,#e66767" --mode dark
+      - name: Validate token JSON parses
+        run: |
+          for f in design-system/tokens/*.json design-system/tokens/themes/*.json; do
+            node -e "JSON.parse(require('fs').readFileSync('$f','utf8'))" && echo "ok $f"
+          done
+      # TODO (Phase 8): stylelint no-raw-hex/px-in-components; stale-dist check; axe + visual regression.

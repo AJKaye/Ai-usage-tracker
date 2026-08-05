@@ -1,0 +1,21 @@
+# Multi-stage build for the ingestion API. Air-gap friendly: no runtime package
+# fetches; the runtime image is the minimal ASP.NET base.
+# ⚠️ AUTHORED, NOT YET BUILT here (no Docker on the dev box) — verify on a Docker host.
+
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+# copy csproj/slnx first for restore-layer caching
+COPY AiUsageTracker.slnx Directory.Build.props ./
+COPY src/ src/
+RUN dotnet restore src/UsageTracker.Ingestion.Api/UsageTracker.Ingestion.Api.csproj
+RUN dotnet publish src/UsageTracker.Ingestion.Api/UsageTracker.Ingestion.Api.csproj \
+    -c Release -o /app --no-restore
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+WORKDIR /app
+# run as a non-root user (least privilege — SOC2/FedRAMP hardening baseline)
+RUN adduser --disabled-password --gecos "" appuser
+USER appuser
+COPY --from=build /app ./
+EXPOSE 8080
+ENTRYPOINT ["dotnet", "UsageTracker.Ingestion.Api.dll"]

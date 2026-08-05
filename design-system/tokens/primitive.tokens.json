@@ -1,0 +1,73 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "$description": "PRIMITIVE layer — raw, brand-neutral scales. Components MUST NOT reference these directly; only the semantic layer aliases them. Source of truth for dist/tokens.css primitives.",
+  "color": {
+    "$type": "color",
+    "gray": {
+      "50":  { "$value": "#f8fafc" }, "100": { "$value": "#f1f5f9" },
+      "200": { "$value": "#e2e8f0" }, "300": { "$value": "#cbd5e1" },
+      "400": { "$value": "#94a3b8" }, "500": { "$value": "#64748b" },
+      "600": { "$value": "#475569" }, "700": { "$value": "#334155" },
+      "800": { "$value": "#1e293b" }, "900": { "$value": "#0f172a" },
+      "950": { "$value": "#020617" }
+    },
+    "brand": {
+      "$description": "Generic professional blue. Overridden per-tenant in themes/*.json — this is the ONLY color a white-label theme must supply.",
+      "50":  { "$value": "#eff6ff" }, "100": { "$value": "#dbeafe" },
+      "200": { "$value": "#bfdbfe" }, "300": { "$value": "#93c5fd" },
+      "400": { "$value": "#60a5fa" }, "500": { "$value": "#3b82f6" },
+      "600": { "$value": "#2563eb" }, "700": { "$value": "#1d4ed8" },
+      "800": { "$value": "#1e40af" }, "900": { "$value": "#1e3a8a" },
+      "950": { "$value": "#172554" }
+    },
+    "green": { "50": {"$value":"#f0fdf4"}, "100": {"$value":"#dcfce7"}, "400": {"$value":"#4ade80"}, "500": {"$value":"#16a34a"}, "600": {"$value":"#15803d"}, "700": {"$value":"#166534"} },
+    "amber": { "50": {"$value":"#fffbeb"}, "100": {"$value":"#fef3c7"}, "300": {"$value":"#fcd34d"}, "500": {"$value":"#d97706"}, "600": {"$value":"#b45309"}, "700": {"$value":"#92400e"} },
+    "red":   { "50": {"$value":"#fef2f2"}, "100": {"$value":"#fee2e2"}, "400": {"$value":"#f87171"}, "500": {"$value":"#dc2626"}, "600": {"$value":"#b91c1c"}, "700": {"$value":"#991b1b"} },
+    "white": { "$value": "#ffffff" },
+    "black": { "$value": "#000000" }
+  },
+  "space": {
+    "$type": "dimension",
+    "$description": "Single canonical 4/8 ramp, dense-dashboard tuned. Reconciles the source kit's split 11-step JSON / 7-step CSS scales into one ramp.",
+    "0": {"$value":"0"}, "1": {"$value":"2px"}, "2": {"$value":"4px"}, "3": {"$value":"8px"},
+    "4": {"$value":"12px"}, "5": {"$value":"16px"}, "6": {"$value":"20px"}, "7": {"$value":"24px"},
+    "8": {"$value":"32px"}, "9": {"$value":"40px"}, "10": {"$value":"48px"}, "11": {"$value":"64px"}, "12": {"$value":"96px"}
+  },
+  "radius": {
+    "$type": "dimension",
+    "none": {"$value":"0"}, "xs": {"$value":"3px"}, "sm": {"$value":"6px"}, "md": {"$value":"8px"},
+    "lg": {"$value":"10px"}, "xl": {"$value":"16px"}, "2xl": {"$value":"24px"}, "full": {"$value":"9999px"}
+  },
+  "font": {
+    "family": {
+      "$type": "fontFamily",
+      "sans": { "$value": "system-ui, -apple-system, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif" },
+      "mono": { "$value": "ui-monospace, \"Cascadia Code\", \"JetBrains Mono\", Menlo, Consolas, monospace" },
+      "display": { "$value": "{font.family.sans}", "$description": "Charts + hero figures stay in the UI sans by mandate. Tenants may repoint to a brand display face." }
+    },
+    "size": {
+      "$type": "dimension",
+      "2xs": {"$value":"11px"}, "xs": {"$value":"12px"}, "sm": {"$value":"13px"}, "base": {"$value":"14px"},
+      "md": {"$value":"16px"}, "lg": {"$value":"18px"}, "xl": {"$value":"20px"}, "2xl": {"$value":"24px"},
+      "3xl": {"$value":"30px"}, "4xl": {"$value":"36px"}, "5xl": {"$value":"48px"}
+    },
+    "weight": { "$type": "fontWeight", "regular": {"$value":400}, "medium": {"$value":500}, "semibold": {"$value":600}, "bold": {"$value":700} },
+    "lineHeight": { "$type": "number", "tight": {"$value":1.2}, "snug": {"$value":1.35}, "normal": {"$value":1.5}, "relaxed": {"$value":1.65} }
+  },
+  "shadow": {
+    "$type": "shadow",
+    "$description": "Authored fresh — no elevation tokens existed in the source brand kits. Dark-mode variants live in the semantic dark scope.",
+    "0": {"$value":"none"},
+    "1": {"$value":"0 1px 2px rgba(0,0,0,.06), 0 1px 3px rgba(0,0,0,.10)"},
+    "2": {"$value":"0 1px 2px rgba(0,0,0,.05), 0 4px 12px rgba(0,0,0,.08)"},
+    "3": {"$value":"0 4px 6px rgba(0,0,0,.05), 0 12px 24px rgba(0,0,0,.10)"},
+    "4": {"$value":"0 8px 16px rgba(0,0,0,.08), 0 24px 48px rgba(0,0,0,.16)"}
+  },
+  "motion": {
+    "duration": { "$type": "duration", "instant": {"$value":"0ms"}, "micro": {"$value":"120ms"}, "fast": {"$value":"180ms"}, "base": {"$value":"240ms"}, "slow": {"$value":"320ms"} },
+    "easing": {
+      "$type": "cubicBezier",
+      "standard": {"$value":[0.2,0,0,1]}, "out": {"$value":[0,0,0.2,1]}, "in": {"$value":[0.4,0,1,1]}, "emphasized": {"$value":[0.2,0,0,1]}
+    }
+  }
+}

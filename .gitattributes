@@ -1,0 +1,24 @@
+# Normalize line endings: store LF in the repo, check out native on each OS.
+* text=auto
+
+# Files that must stay LF even on Windows (executed on linux/macOS or by tooling).
+*.sh   text eol=lf
+*.mjs  text eol=lf
+*.json text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+
+# C#/web sources: LF in the repo (consistent cross-platform diffs).
+*.cs   text eol=lf
+*.csproj text eol=lf
+*.slnx text eol=lf
+*.props text eol=lf
+*.ts   text eol=lf
+*.css  text eol=lf
+*.md   text eol=lf
+
+# Treat these as binary (no line-ending munging, no diff noise).
+*.png binary
+*.jpg binary
+*.ico binary
+*.db  binary

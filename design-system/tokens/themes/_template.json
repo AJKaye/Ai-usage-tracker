@@ -1,0 +1,27 @@
+{
+  "$description": "COPY-TO-CREATE-A-TENANT skeleton. This is the ENTIRE white-label surface — a tenant supplies only these ~dozen values and inherits the full semantic/component/chart system from _base. Steps to add a tenant: (1) copy this file to `<tenant>.json`; (2) fill brand.ramp (11 steps of the tenant's primary hue — keep 600 as the on-white solid, 700 AA for small text); (3) optionally set fonts/radius/accent; (4) if overriding chart.palette, replace the 8 categorical slots and RUN scripts/validate_palette.mjs (light+dark) — omit to inherit the safe default; (5) the build emits a `[data-theme=\"<tenant>\"]` scope in dist/tokens.css. Null = inherit from base.",
+  "theme": {
+    "name": "REPLACE-tenant-id",
+    "extends": "base"
+  },
+  "brand": {
+    "ramp": {
+      "50":  "REPLACE", "100": "REPLACE", "200": "REPLACE", "300": "REPLACE", "400": "REPLACE",
+      "500": "REPLACE", "600": "REPLACE-on-white-solid", "700": "REPLACE-AA-small-text",
+      "800": "REPLACE", "900": "REPLACE", "950": "REPLACE"
+    },
+    "accent": null
+  },
+  "font": {
+    "display": null,
+    "sans": null
+  },
+  "radius": {
+    "control": null,
+    "input": null
+  },
+  "chart": {
+    "palette": "inherit",
+    "_note": "To brand charts: replace with { \"light\": [8 hexes], \"dark\": [8 hexes] } and pass the validator. Otherwise leave as \"inherit\" — the generic default is already accessibility-gated."
+  }
+}

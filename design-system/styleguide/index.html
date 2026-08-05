@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Usage Tracker — Living Styleguide</title>
+<!-- The design system's single distribution file. Everything below styles ONLY
+     against its custom properties — no raw hex/px in this page's own CSS either.
+     Switch theme/mode with the controls top-right and watch the whole page
+     restyle with zero markup changes: the "change once → applies everywhere" proof. -->
+<link rel="stylesheet" href="../dist/tokens.css">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--color-bg-canvas);
+    color: var(--color-text-primary);
+    font-family: var(--font-sans);
+    font-size: var(--fs-base);
+    line-height: var(--lh-normal);
+    -webkit-font-smoothing: antialiased;
+    transition: background var(--dur-base) var(--ease-standard), color var(--dur-base) var(--ease-standard);
+  }
+  h1, h2, h3 { font-family: var(--font-display); line-height: var(--lh-tight); }
+  code { font-family: var(--font-mono); font-size: .85em; color: var(--color-brand-text); }
+
+  header.top {
+    position: sticky; top: 0; z-index: var(--z-sticky);
+    display: flex; align-items: center; justify-content: space-between; gap: var(--space-6);
+    padding: var(--space-5) var(--space-8);
+    background: var(--topbar-bg); border-bottom: 1px solid var(--topbar-border);
+  }
+  header.top .brand { font-weight: var(--fw-bold); font-size: var(--fs-lg); }
+  header.top .brand small { display:block; font-family: var(--font-sans); font-weight: var(--fw-regular); font-size: var(--fs-xs); color: var(--color-text-muted); }
+  .controls { display: flex; gap: var(--space-3); align-items: center; }
+  .seg { display: inline-flex; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); overflow: hidden; }
+  .seg button {
+    font: inherit; font-size: var(--fs-sm); border: 0; background: var(--color-bg-surface); color: var(--color-text-secondary);
+    padding: var(--space-2) var(--space-4); cursor: pointer;
+    transition: background var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
+  }
+  .seg button[aria-pressed="true"] { background: var(--color-brand-solid); color: var(--color-text-on-brand); }
+  .seg button:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring-color); outline-offset: -2px; }
+
+  main { max-width: 1180px; margin: 0 auto; padding: var(--space-9) var(--space-8) var(--space-12); }
+  section { margin-bottom: var(--space-11); }
+  section > h2 { font-size: var(--fs-2xl); margin: 0 0 var(--space-2); }
+  section > .lede { color: var(--color-text-secondary); margin: 0 0 var(--space-6); max-width: 70ch; }
+  h3.sub { font-size: var(--fs-md); color: var(--color-text-secondary); margin: var(--space-7) 0 var(--space-4); text-transform: uppercase; letter-spacing: var(--ls-wide); }
+
+  .grid { display: grid; gap: var(--space-4); }
+  .grid.cols { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .grid.stats { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+
+  .card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: var(--card-radius); box-shadow: var(--card-shadow); padding: var(--card-pad); }
+
+  /* swatches */
+  .swatch { border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); overflow: hidden; background: var(--color-bg-surface); }
+  .swatch .chip { height: 56px; }
+  .swatch .meta { padding: var(--space-3) var(--space-4); font-size: var(--fs-xs); }
+  .swatch .meta b { display:block; color: var(--color-text-primary); font-weight: var(--fw-semibold); }
+  .swatch .meta span { color: var(--color-text-muted); font-family: var(--font-mono); }
+
+  /* buttons */
+  .btn { font: inherit; font-weight: var(--btn-font-weight); border-radius: var(--btn-radius); padding: var(--btn-pad-y) var(--btn-pad-x); border: 1px solid transparent; cursor: pointer; transition: background var(--dur-fast) var(--ease-standard); }
+  .btn-primary { background: var(--btn-primary-bg); color: var(--btn-primary-fg); }
+  .btn-primary:hover { background: var(--btn-primary-bg-hover); }
+  .btn-primary:active { background: var(--btn-primary-bg-active); }
+  .btn-primary:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring-color); outline-offset: var(--focus-ring-offset); }
+  .btn-secondary { background: var(--btn-secondary-bg); color: var(--btn-secondary-fg); border-color: var(--btn-secondary-border); }
+  .btn-secondary:hover { background: var(--btn-secondary-bg-hover); }
+  .btn[disabled] { opacity: .45; cursor: not-allowed; }
+  .row { display: flex; gap: var(--space-4); flex-wrap: wrap; align-items: center; }
+
+  /* input */
+  .field label { display:block; font-size: var(--fs-sm); color: var(--color-text-secondary); margin-bottom: var(--space-2); }
+  .field input { width: 100%; background: var(--input-bg); color: var(--input-fg); border: 1px solid var(--input-border); border-radius: var(--input-radius); padding: var(--input-pad-y) var(--input-pad-x); font: inherit; }
+  .field input::placeholder { color: var(--input-placeholder); }
+  .field input:hover { border-color: var(--input-border-hover); }
+  .field input:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring-color); outline-offset: var(--focus-ring-offset); border-color: var(--color-border-focus); }
+  .field.err input { border-color: var(--color-feedback-danger-border); }
+  .field.err .msg { color: var(--color-feedback-danger-fg); font-size: var(--fs-xs); margin-top: var(--space-2); }
+
+  /* chips */
+  .chips { display: flex; gap: var(--space-3); flex-wrap: wrap; }
+  .chip-badge { display:inline-flex; align-items:center; gap: var(--space-2); border-radius: var(--chip-radius); padding: var(--chip-pad-y) var(--chip-pad-x); font-size: var(--chip-font); font-weight: var(--fw-semibold); }
+  .chip-badge .dot { width: 8px; height: 8px; border-radius: var(--radius-full); }
+  .chip-success { background: var(--color-feedback-success-subtle); color: var(--color-feedback-success-fg); }
+  .chip-success .dot { background: var(--color-feedback-success-solid); }
+  .chip-warning { background: var(--color-feedback-warning-subtle); color: var(--color-feedback-warning-fg); }
+  .chip-warning .dot { background: var(--color-feedback-warning-solid); }
+  .chip-danger { background: var(--color-feedback-danger-subtle); color: var(--color-feedback-danger-fg); }
+  .chip-danger .dot { background: var(--color-feedback-danger-solid); }
+  .chip-info { background: var(--color-feedback-info-subtle); color: var(--color-feedback-info-fg); }
+  .chip-info .dot { background: var(--color-feedback-info-fg); }
+
+  /* stat tiles */
+  .stat .label { color: var(--stat-label-fg); font-size: var(--fs-sm); }
+  .stat .value { color: var(--stat-value-fg); font-size: var(--stat-value-size); font-weight: var(--stat-value-weight); letter-spacing: var(--ls-tight); margin-top: var(--space-2); }
+  .stat .delta { font-size: var(--fs-sm); margin-top: var(--space-1); }
+  .stat .delta.up { color: var(--chart-delta-good); }
+  .stat .delta.down { color: var(--color-feedback-danger-fg); }
+  .hero { font-size: var(--hero-figure-size); font-weight: var(--fw-bold); letter-spacing: var(--ls-tight); line-height: 1; }
+
+  /* table */
+  table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+  thead th { background: var(--table-header-bg); color: var(--table-header-fg); text-align: left; font-weight: var(--fw-semibold); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: var(--ls-wide); padding: var(--table-cell-pad-y) var(--table-cell-pad-x); border-bottom: 1px solid var(--table-border); }
+  tbody td { padding: var(--table-cell-pad-y) var(--table-cell-pad-x); border-bottom: 1px solid var(--table-border); }
+  tbody tr:hover { background: var(--table-row-hover); }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; font-weight: var(--fw-semibold); letter-spacing: var(--ls-tight); }
+
+  /* chart demo (pure token-driven SVG) */
+  .chartcard { background: var(--chart-surface); border: 1px solid var(--chart-border); border-radius: var(--card-radius); padding: var(--space-6); }
+  .legend { display: flex; gap: var(--space-5); flex-wrap: wrap; margin-top: var(--space-4); font-size: var(--fs-xs); color: var(--chart-ink-secondary); }
+  .legend .key { display: inline-flex; align-items: center; gap: var(--space-2); }
+  .legend .stroke { width: 14px; height: 2px; border-radius: 2px; }
+
+  .palette-row { display:flex; flex-wrap: wrap; gap: var(--space-2); }
+  .palette-row .cat { width: 40px; height: 40px; border-radius: var(--radius-sm); border: 2px solid var(--chart-surface); box-shadow: 0 0 0 1px var(--color-border-subtle); }
+  .note { font-size: var(--fs-xs); color: var(--color-text-muted); margin-top: var(--space-3); }
+  .spacer { display:inline-block; background: var(--color-brand-solid); border-radius: var(--radius-xs); height: 16px; }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">AI Usage Tracker — Living Styleguide <small>every token &amp; state · theme-switchable · the "applies everywhere" proof</small></div>
+  <div class="controls">
+    <div class="seg" role="group" aria-label="Theme">
+      <button data-theme-set="light" aria-pressed="true">Base</button>
+      <button data-theme-set="example-ssc" aria-pressed="false">SS&amp;C</button>
+    </div>
+    <div class="seg" role="group" aria-label="Mode">
+      <button data-mode-set="light" aria-pressed="true">Light</button>
+      <button data-mode-set="dark" aria-pressed="false">Dark</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section>
+    <h2>How this page works</h2>
+    <p class="lede">Nothing here uses a raw color or size — every rule references a design token from <code>../dist/tokens.css</code>. Use the switches above: <b>Base ↔ SS&amp;C</b> swaps the tenant theme (brand ramp, fonts, radii); <b>Light ↔ Dark</b> swaps the mode. The entire page recomposes with no markup change. That is exactly how a real feature inherits a design change.</p>
+  </section>
+
+  <section>
+    <h2>Semantic colors</h2>
+    <p class="lede">Role tokens components actually consume. These re-point per theme + mode; primitives (raw ramps) are never referenced directly.</p>
+    <h3 class="sub">Surfaces &amp; text</h3>
+    <div class="grid cols" id="sw-surfaces"></div>
+    <h3 class="sub">Brand &amp; feedback</h3>
+    <div class="grid cols" id="sw-roles"></div>
+  </section>
+
+  <section>
+    <h2>Typography &amp; numbers</h2>
+    <div class="card">
+      <div class="hero">$4.2M</div>
+      <p class="note">Hero figure — <code>--hero-figure-size</code>, system sans, one per view.</p>
+      <h1 style="margin:var(--space-5) 0 0">Display heading — var(--font-display)</h1>
+      <h3 style="margin:var(--space-3) 0 0">Subheading</h3>
+      <p style="max-width:60ch">Body copy in <code>--font-sans</code> at <code>--fs-base</code>. Data-dense apps read at 13–14px, not a marketing 18px base. Big numbers use proportional figures; table columns use <code>tabular-nums</code>.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Spacing &amp; radii</h2>
+    <div class="card">
+      <h3 class="sub">Spacing ramp (4/8, dense-tuned)</h3>
+      <div class="row" id="spacing-demo" style="align-items:flex-end"></div>
+      <h3 class="sub">Radii</h3>
+      <div class="row" id="radii-demo"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Buttons &amp; inputs — states</h2>
+    <div class="card">
+      <h3 class="sub">Buttons (hover/active/focus/disabled)</h3>
+      <div class="row">
+        <button class="btn btn-primary">Primary</button>
+        <button class="btn btn-secondary">Secondary</button>
+        <button class="btn btn-primary" disabled>Disabled</button>
+      </div>
+      <h3 class="sub">Inputs (default / focus / error)</h3>
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">
+        <div class="field"><label for="i1">Workspace name</label><input id="i1" placeholder="e.g. Platform team"></div>
+        <div class="field err"><label for="i2">Monthly budget (USD)</label><input id="i2" value="abc"><div class="msg" role="alert">Enter a number, e.g. 5000 — letters aren't allowed.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Status chips</h2>
+    <p class="lede">Feedback roles, always <b>dot + label</b> (never color alone).</p>
+    <div class="chips">
+      <span class="chip-badge chip-success"><span class="dot"></span>Reconciled</span>
+      <span class="chip-badge chip-info"><span class="dot"></span>Estimated</span>
+      <span class="chip-badge chip-warning"><span class="dot"></span>Pending sync</span>
+      <span class="chip-badge chip-danger"><span class="dot"></span>Over budget</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Stat-tile / KPI row</h2>
+    <div class="grid stats">
+      <div class="card stat"><div class="label">Total spend (30d)</div><div class="value">$128,402</div><div class="delta up">▲ 4.2% vs prev 30d</div></div>
+      <div class="card stat"><div class="label">Tokens</div><div class="value">1.28B</div><div class="delta up">▲ 11%</div></div>
+      <div class="card stat"><div class="label">Est vs reconciled Δ</div><div class="value">-$412</div><div class="delta down">▼ 0.3%</div></div>
+      <div class="card stat"><div class="label">Cache hit rate</div><div class="value">63%</div><div class="delta up">▲ 6pts</div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Data table (dense)</h2>
+    <div class="card" style="padding:0;overflow:hidden">
+      <table>
+        <thead><tr><th>Provider</th><th>Model</th><th class="num">Input tok</th><th class="num">Output tok</th><th class="num">Est. cost</th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Chart layer</h2>
+    <p class="lede">Chart chrome + the generic validated categorical palette, both mode-aware via <code>--chart-*</code> tokens. Marks carry the data hue; axes/labels use ink tokens; the palette is the accessibility-gated default (swap per tenant, then re-validate).</p>
+    <div class="chartcard">
+      <svg id="linechart" viewBox="0 0 640 240" width="100%" height="240" role="img" aria-label="Demo multi-series line chart"></svg>
+      <div class="legend" id="legend"></div>
+    </div>
+    <h3 class="sub">Categorical palette (slots 1–8, fixed order)</h3>
+    <div class="palette-row" id="palette"></div>
+    <p class="note">Assign in order, never cycle past 8. Order is the color-blind-safety mechanism — gated by <code>scripts/validate_palette.mjs</code> in CI.</p>
+  </section>
+</main>
+
+<script>
+  const root = document.documentElement;
+  let theme = "light";  // "light" (base) | "example-ssc"
+  let mode  = "light";  // "light" | "dark"
+
+  // Compose theme + mode into data-theme. Dark base -> "dark"; dark tenant -> we
+  // stack the tenant theme + a dark class-equivalent by setting data-theme to the
+  // tenant and toggling a parallel [data-theme="dark"] via a wrapper attribute.
+  function apply() {
+    // Tenant theme drives brand tokens; mode drives light/dark semantics.
+    // For the seed dist, base+dark uses data-theme="dark"; tenant+dark stacks both
+    // by applying the tenant on <html> and dark on <body>.
+    if (theme === "light" && mode === "light") { root.setAttribute("data-theme","light"); document.body.removeAttribute("data-theme"); }
+    else if (theme === "light" && mode === "dark") { root.setAttribute("data-theme","dark"); document.body.removeAttribute("data-theme"); }
+    else if (theme === "example-ssc" && mode === "light") { root.setAttribute("data-theme","example-ssc"); document.body.removeAttribute("data-theme"); }
+    else { root.setAttribute("data-theme","example-ssc"); document.body.setAttribute("data-theme","dark"); }
+  }
+  document.querySelectorAll("[data-theme-set]").forEach(b => b.addEventListener("click", () => {
+    theme = b.getAttribute("data-theme-set");
+    document.querySelectorAll("[data-theme-set]").forEach(x => x.setAttribute("aria-pressed", String(x===b)));
+    apply();
+  }));
+  document.querySelectorAll("[data-mode-set]").forEach(b => b.addEventListener("click", () => {
+    mode = b.getAttribute("data-mode-set");
+    document.querySelectorAll("[data-mode-set]").forEach(x => x.setAttribute("aria-pressed", String(x===b)));
+    apply();
+  }));
+
+  // --- render token swatches from the actual CSS vars (proves they're live) ---
+  const swatch = (name, cssVar) => `<div class="swatch"><div class="chip" style="background:var(${cssVar})"></div><div class="meta"><b>${name}</b><span>${cssVar}</span></div></div>`;
+  document.getElementById("sw-surfaces").innerHTML = [
+    ["Canvas","--color-bg-canvas"],["Surface","--color-bg-surface"],["Raised","--color-bg-surface-raised"],
+    ["Subtle","--color-bg-subtle"],["Muted","--color-bg-muted"],["Border","--color-border-default"],
+    ["Text primary","--color-text-primary"],["Text secondary","--color-text-secondary"],["Text muted","--color-text-muted"],
+  ].map(([n,v])=>swatch(n,v)).join("");
+  document.getElementById("sw-roles").innerHTML = [
+    ["Brand solid","--color-brand-solid"],["Brand hover","--color-brand-solid-hover"],["Brand subtle","--color-brand-subtle"],
+    ["Success","--color-feedback-success-solid"],["Warning","--color-feedback-warning-solid"],["Danger","--color-feedback-danger-solid"],["Info","--color-feedback-info-fg"],
+  ].map(([n,v])=>swatch(n,v)).join("");
+
+  // spacing + radii demos
+  document.getElementById("spacing-demo").innerHTML = [3,4,5,6,7,8,9,10].map(n =>
+    `<div style="text-align:center"><span class="spacer" style="width:var(--space-${n})"></span><div class="note">${n}</div></div>`).join("");
+  document.getElementById("radii-demo").innerHTML = ["sm","md","lg","xl","2xl"].map(r =>
+    `<div style="text-align:center"><div style="width:56px;height:40px;background:var(--color-brand-subtle);border:1px solid var(--color-border-default);border-radius:var(--radius-${r})"></div><div class="note">${r}</div></div>`).join("");
+
+  // table
+  const rows = [
+    ["OpenAI","gpt-5.6","1,240,881","318,004","$1,204.55"],
+    ["Anthropic","claude-opus-5","902,140","210,338","$988.21"],
+    ["Google","gemini-3.1-pro","540,002","150,900","$421.08"],
+    ["Azure","gpt-5.6 (GlobalStd)","330,551","88,120","$302.44"],
+  ];
+  document.getElementById("tbody").innerHTML = rows.map(r =>
+    `<tr><td>${r[0]}</td><td><code>${r[1]}</code></td><td class="num">${r[2]}</td><td class="num">${r[3]}</td><td class="num">${r[4]}</td></tr>`).join("");
+
+  // categorical palette swatches
+  const cats = [1,2,3,4,5,6,7,8];
+  document.getElementById("palette").innerHTML = cats.map(i => `<div class="cat" style="background:var(--chart-cat-${i})" title="slot ${i}"></div>`).join("");
+
+  // simple multi-series line chart, pure token colors
+  (function(){
+    const svg = document.getElementById("linechart");
+    const W=640,H=240,padL=40,padB=28,padT=12,padR=12;
+    const series = [
+      {name:"OpenAI", v:[20,32,28,45,52,60,58]},
+      {name:"Anthropic", v:[12,18,26,30,42,50,66]},
+      {name:"Google", v:[8,10,14,20,22,28,34]},
+    ];
+    const max=70, n=series[0].v.length;
+    const x=i=> padL + i*(W-padL-padR)/(n-1);
+    const y=val=> padT + (1-val/max)*(H-padT-padB);
+    let out="";
+    // gridlines (hairline, token color)
+    for(let g=0; g<=max; g+=17.5){ out+=`<line x1="${padL}" y1="${y(g)}" x2="${W-padR}" y2="${y(g)}" stroke="var(--chart-gridline)" stroke-width="1"/>`; }
+    // baseline/axis
+    out+=`<line x1="${padL}" y1="${y(0)}" x2="${W-padR}" y2="${y(0)}" stroke="var(--chart-baseline)" stroke-width="1"/>`;
+    series.forEach((s,si)=>{
+      const pts=s.v.map((val,i)=>`${x(i)},${y(val)}`).join(" ");
+      out+=`<polyline fill="none" stroke="var(--chart-cat-${si+1})" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="${pts}"/>`;
+      // end marker with surface ring
+      const lx=x(n-1), ly=y(s.v[n-1]);
+      out+=`<circle cx="${lx}" cy="${ly}" r="4" fill="var(--chart-cat-${si+1})" stroke="var(--chart-surface)" stroke-width="2"/>`;
+    });
+    // axis labels in ink tokens (never data color)
+    out+=`<text x="${padL}" y="${H-8}" fill="var(--chart-ink-muted)" font-size="11" font-family="var(--font-sans)">wk1</text>`;
+    out+=`<text x="${W-padR-20}" y="${H-8}" fill="var(--chart-ink-muted)" font-size="11" font-family="var(--font-sans)">wk7</text>`;
+    svg.innerHTML=out;
+    document.getElementById("legend").innerHTML = series.map((s,si)=>`<span class="key"><span class="stroke" style="background:var(--chart-cat-${si+1})"></span>${s.name}</span>`).join("");
+  })();
+</script>
+</body>
+</html>

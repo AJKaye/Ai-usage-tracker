@@ -1,0 +1,27 @@
+# .NET build output
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+*.user
+
+# published single-file artifacts (built by CI / release, not committed)
+publish/
+
+# local embedded SQLite databases
+*.db
+*.db-shm
+*.db-wal
+
+# design-system generated dist is CHECKED IN as the reference seed until the
+# Style Dictionary pipeline lands (see design-system/scripts/build.md), so it is
+# intentionally NOT ignored here.
+
+# node (design-system tooling / future SPA)
+node_modules/
+npm-debug.log*
+
+# local env / secrets — never commit
+.env
+.env.*
+*.log

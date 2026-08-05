@@ -1,0 +1,92 @@
+# AI Usage Tracker — self-host bootstrap (D3, Phase 0 deliverable).
+#
+# ⚠️ AUTHORED, NOT YET VERIFIED: the dev box used to build the slice has no
+# Docker, so `docker compose up` has not been run here. YAML shape is validated;
+# runtime is unverified until brought up on a Docker host. This is the honest
+# state — do not treat it as a proven bootstrap yet.
+#
+# Brings up the distributed backing stack (ADR-0001) + the ingestion API, so a
+# developer/customer gets the full self-host path from one command. The API here
+# still uses the in-memory store (ADR-0008) until the ClickHouse/Kafka/Postgres
+# implementations land in Phase 1 — the datastores are included now so wiring
+# them is config, not new infra.
+
+name: aiusagetracker
+
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8
+    environment:
+      CLICKHOUSE_DB: usage
+      CLICKHOUSE_USER: usage
+      # secret comes from the environment / secrets manager, never hardcoded
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?set CLICKHOUSE_PASSWORD in .env}
+    ports: ["8123:8123", "9000:9000"]
+    volumes: ["clickhouse-data:/var/lib/clickhouse"]
+    ulimits:
+      nofile: { soft: 262144, hard: 262144 }
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: usage
+      POSTGRES_USER: usage
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    ports: ["5432:5432"]
+    volumes: ["postgres-data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U usage -d usage"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  # Kafka in KRaft mode (no ZooKeeper).
+  kafka:
+    image: bitnami/kafka:3.8
+    environment:
+      KAFKA_CFG_NODE_ID: "1"
+      KAFKA_CFG_PROCESS_ROLES: "broker,controller"
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
+      KAFKA_CFG_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093"
+      KAFKA_CFG_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092"
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"
+    ports: ["9092:9092"]
+    volumes: ["kafka-data:/bitnami/kafka"]
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 6
+
+  ingestion-api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.ingestion-api
+    environment:
+      ASPNETCORE_URLS: "http://+:8080"
+      # Phase 1 will read these to switch off the in-memory store:
+      USAGETRACKER__STORE: "inmemory"   # -> "clickhouse" when the impl lands
+      CLICKHOUSE__URL: "http://clickhouse:8123"
+      POSTGRES__CONNECTION: "Host=postgres;Database=usage;Username=usage;Password=${POSTGRES_PASSWORD}"
+      KAFKA__BOOTSTRAP: "kafka:9092"
+    ports: ["5199:8080"]
+    depends_on:
+      clickhouse: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+volumes:
+  clickhouse-data:
+  postgres-data:
+  kafka-data:
