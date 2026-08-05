@@ -97,7 +97,35 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .chip.designed { background: var(--color-bg-muted); color: var(--color-text-secondary); }
 
 .muted { color: var(--color-text-muted); }
+.small { font-size: 12px; }
 .error { color: var(--color-feedback-danger-fg); }
+
+/* --- code snippets (Integrations page) --- */
+.codeblock {
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  margin: var(--space-4) 0;
+  background: var(--color-bg-surface-sunken);
+}
+.codeblock-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-muted);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+.codeblock-lang { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--color-text-muted); }
+.codeblock-actions { display: flex; gap: var(--space-2); }
+.btn-sm { padding: 2px var(--space-3); font-size: 12px; }
+.codeblock-pre {
+  margin: 0; padding: var(--space-4);
+  overflow-x: auto;
+  font-family: var(--font-family-mono, ui-monospace, monospace);
+  font-size: 12.5px; line-height: 1.5;
+  color: var(--color-text-primary);
+  white-space: pre;
+}
+code { font-family: var(--font-family-mono, ui-monospace, monospace); }
 
 /* --- reduced motion honored globally (design-system motion principle) --- */
 @media (prefers-reduced-motion: reduce) {

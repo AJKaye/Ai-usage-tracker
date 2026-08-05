@@ -4,6 +4,7 @@ import { Dashboard } from './pages/Dashboard'
 import { Allocation } from './pages/Allocation'
 import { Efficiency } from './pages/Efficiency'
 import { Governance } from './pages/Governance'
+import { Integrations } from './pages/Integrations'
 
 // White-label + light/dark are pure design-system mechanisms: the theme is a
 // [data-theme] scope, the color-scheme follows the OS unless toggled. Switching
@@ -31,6 +32,7 @@ export function App() {
         <NavLink to="/" end className="nav-link">Dashboard</NavLink>
         <NavLink to="/allocation" className="nav-link">Allocation</NavLink>
         <NavLink to="/efficiency" className="nav-link">Efficiency</NavLink>
+        <NavLink to="/integrations" className="nav-link">Integrations</NavLink>
         <NavLink to="/governance" className="nav-link">Regulatory Governance</NavLink>
       </nav>
       <div className="main">
@@ -40,6 +42,7 @@ export function App() {
               <Route path="/" element={<>Cost &amp; Usage</>} />
               <Route path="/allocation" element={<>Cost Allocation</>} />
               <Route path="/efficiency" element={<>Efficiency</>} />
+              <Route path="/integrations" element={<>Integrations — connect your tools</>} />
               <Route path="/governance" element={<>Regulatory Governance</>} />
             </Routes>
           </h1>
@@ -63,6 +66,7 @@ export function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/allocation" element={<Allocation />} />
           <Route path="/efficiency" element={<Efficiency />} />
+          <Route path="/integrations" element={<Integrations />} />
           <Route path="/governance" element={<Governance />} />
         </Routes>
       </div>
