@@ -8,9 +8,17 @@ Enterprise-grade central repository that tracks AI usage across every consuming 
 
 The easiest way to run it: **one self-contained executable, nothing to install** — no .NET, no Docker, no database server, no admin. It runs in the **`solo`** profile, storing to an embedded SQLite file next to the exe.
 
+**Double-click it and it opens like a desktop app:** in `solo` mode the exe starts its
+local server and opens the dashboard in a **chromeless app-mode browser window** (no
+tabs/address bar) at `http://127.0.0.1:5000`. It's still a server underneath — so on a
+headless box (or when you pin `ASPNETCORE_URLS` / run a server profile) it stays
+window-less. Opt out of the window with `USAGETRACKER__NO_WINDOW=1` and just browse to
+the URL.
+
 ```powershell
-# Windows
-usage-tracker.exe                      # → listens on http://localhost:5000, data in usage-tracker.db
+# Windows — double-click, or:
+usage-tracker.exe                      # → opens a window at http://127.0.0.1:5000; data in usage-tracker.db
+usage-tracker.exe                      # (set USAGETRACKER__NO_WINDOW=1 to run headless)
 ```
 ```bash
 # Linux / macOS

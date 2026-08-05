@@ -28,6 +28,17 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 var profile = (Environment.GetEnvironmentVariable("USAGETRACKER__PROFILE")
     ?? builder.Configuration["Profile"] ?? "solo").Trim().ToLowerInvariant();
 
+// --- Desktop window (solo): make the .exe feel like a native app -------------
+// In the solo profile with no operator-pinned URL, bind a fixed loopback URL and
+// open a chromeless browser window at it after startup. Servers/SaaS (pinned URL /
+// other profile) and the test host are untouched. Best-effort; never fatal.
+var pinnedUrls = Environment.GetEnvironmentVariable("ASPNETCORE_URLS");
+var openWindow = DesktopWindow.ShouldOpen(profile, pinnedUrls,
+    Environment.GetEnvironmentVariable("USAGETRACKER__NO_WINDOW"));
+string desktopUrl = "http://127.0.0.1:5000";
+if (openWindow)
+    builder.WebHost.UseUrls(desktopUrl);   // deterministic port so we know where to open the window
+
 // --- composition root: wire the replaceable modules behind their contracts ---
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton(TokenNormalizerRegistry.CreateDefault());
@@ -452,6 +463,11 @@ app.MapPost("/mcp", async (HttpRequest req, McpServer mcp, CancellationToken ct)
 // SPA fallback: any non-API, non-file route serves index.html so client-side routing
 // works (deep links to /dashboard, /governance, …). No-op if no SPA bundle is present.
 app.MapFallbackToFile("index.html");
+
+// Solo desktop: once the server is listening, open the SPA in an app-mode window.
+if (openWindow)
+    app.Lifetime.ApplicationStarted.Register(() =>
+        DesktopWindow.Open(desktopUrl, app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("desktop")));
 
 app.Run();
 
