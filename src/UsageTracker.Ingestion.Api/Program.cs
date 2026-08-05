@@ -1,6 +1,7 @@
 using UsageTracker.Contracts;
 using UsageTracker.Cost;
 using UsageTracker.Ingestion.Api;
+using UsageTracker.FinOps;
 using UsageTracker.Ingestion.Otlp;
 using UsageTracker.Normalization;
 using UsageTracker.Reconciliation;
@@ -40,6 +41,9 @@ builder.Services.AddSingleton<IReconciler>(sp => new CostReconciler(
     sp.GetServices<IBillingConnector>(),
     sp.GetRequiredService<IReconciliationStore>(),
     msg => sp.GetRequiredService<ILoggerFactory>().CreateLogger("reconciler").LogWarning("{Msg}", msg)));
+
+// --- Phase 6: FinOps serving (allocation / unit economics / FOCUS / scores) --
+builder.Services.AddSingleton<IScoreSink, InMemoryScoreSink>();
 
 // The ONLY line that changes per deployment tier — every profile satisfies IEventStore.
 builder.Services.AddSingleton<IEventStore>(_ => profile switch
@@ -226,7 +230,76 @@ app.MapGet("/v1/reconcile", async (HttpRequest req, string? day, IReconciliation
     return result is null ? Results.NotFound() : Results.Ok(result);
 });
 
+// --- Phase 6: FinOps serving API (the query layer the SPA + integrators consume) ---
+// All read over the tenant's spans; the heavy analytics run in-process (solo) or
+// could push down to ClickHouse in the scale tier behind the same IEventStore query.
+
+// Cost allocation by any captured dimension (tag-free): team|user|session|model|
+// provider|environment|kind, or a Metadata key (feature/agent/mcp.session).
+app.MapGet("/v1/allocation", async (HttpRequest req, string? dimension, IEventStore store, CancellationToken ct) =>
+{
+    var spans = await store.QueryAsync(new SpanQuery { TenantId = Tenant(req), Limit = int.MaxValue }, ct);
+    var strategy = new DimensionAllocationStrategy(string.IsNullOrWhiteSpace(dimension) ? "provider" : dimension);
+    var buckets = strategy.Allocate(spans);
+    return Results.Ok(new { dimension = strategy.Dimension, buckets, total = buckets.Sum(b => b.Cost) });
+});
+
+// Unit economics: cost per token / inference / outcome (pass ?outcomes=N for the last).
+app.MapGet("/v1/unit-economics", async (HttpRequest req, long? outcomes, IEventStore store, CancellationToken ct) =>
+{
+    var spans = await store.QueryAsync(new SpanQuery { TenantId = Tenant(req), Limit = int.MaxValue }, ct);
+    return Results.Ok(new
+    {
+        costPerToken = new CostPerTokenMetric().Compute(spans, 0),
+        costPerInference = new CostPerInferenceMetric().Compute(spans, 0),
+        costPerOutcome = outcomes is { } n ? new CostPerOutcomeMetric().Compute(spans, n) : (decimal?)null,
+        outcomes,
+    });
+});
+
+// FOCUS-column cost rows (the cross-vendor billing schema; export-ready).
+app.MapGet("/v1/focus", async (HttpRequest req, IEventStore store, CancellationToken ct) =>
+{
+    var spans = await store.QueryAsync(new SpanQuery { TenantId = Tenant(req), Limit = int.MaxValue }, ct);
+    return Results.Ok(FocusProjection.Project(spans));
+});
+
+// Operational efficiency: latency, TTFT, cache-hit, error rate — derived from spans.
+app.MapGet("/v1/efficiency", async (HttpRequest req, IEventStore store, CancellationToken ct) =>
+{
+    var spans = await store.QueryAsync(new SpanQuery { TenantId = Tenant(req), Limit = int.MaxValue }, ct);
+    return Results.Ok(EfficiencyCalculator.Compute(spans));
+});
+
+// Score aggregation: attach an externally-computed eval score to a span/trace, and read them back.
+app.MapPost("/v1/scores", async (HttpRequest req, ScoreDto dto, IScoreSink sink, TimeProvider clock, CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(dto.TargetId) || string.IsNullOrWhiteSpace(dto.Name))
+        return Results.BadRequest(new { error = "target_id and name are required" });
+    await sink.AttachAsync(new Score
+    {
+        TenantId = Tenant(req), TargetId = dto.TargetId, Name = dto.Name,
+        Numeric = dto.Numeric, Category = dto.Category, Boolean = dto.Boolean,
+        Source = dto.Source, At = clock.GetUtcNow(),
+    }, ct);
+    return Results.Accepted(value: new { attached = true });
+});
+
+app.MapGet("/v1/spans/{spanId}/scores", async (HttpRequest req, string spanId, IScoreSink sink, CancellationToken ct) =>
+    Results.Ok(await sink.GetForSpanAsync(Tenant(req), spanId, ct)));
+
 app.Run();
+
+// Wire DTO for POST /v1/scores (framework-agnostic externally-computed score).
+public sealed record ScoreDto
+{
+    [System.Text.Json.Serialization.JsonPropertyName("target_id")] public string? TargetId { get; init; }
+    [System.Text.Json.Serialization.JsonPropertyName("name")] public string? Name { get; init; }
+    [System.Text.Json.Serialization.JsonPropertyName("numeric")] public double? Numeric { get; init; }
+    [System.Text.Json.Serialization.JsonPropertyName("category")] public string? Category { get; init; }
+    [System.Text.Json.Serialization.JsonPropertyName("boolean")] public bool? Boolean { get; init; }
+    [System.Text.Json.Serialization.JsonPropertyName("source")] public string? Source { get; init; }
+}
 
 // Exposed so the test project can spin up the API via WebApplicationFactory.
 public partial class Program;

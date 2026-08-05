@@ -6,6 +6,7 @@
     <Project Path="src/UsageTracker.Adapters.Reference/UsageTracker.Adapters.Reference.csproj" />
     <Project Path="src/UsageTracker.Contracts/UsageTracker.Contracts.csproj" />
     <Project Path="src/UsageTracker.Cost/UsageTracker.Cost.csproj" />
+    <Project Path="src/UsageTracker.FinOps/UsageTracker.FinOps.csproj" />
     <Project Path="src/UsageTracker.Ingestion.Api/UsageTracker.Ingestion.Api.csproj" />
     <Project Path="src/UsageTracker.Ingestion.Otlp/UsageTracker.Ingestion.Otlp.csproj" />
     <Project Path="src/UsageTracker.Ingestion.Proxy/UsageTracker.Ingestion.Proxy.csproj" />
