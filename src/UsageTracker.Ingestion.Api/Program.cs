@@ -124,6 +124,35 @@ app.MapPost("/v1/traces", async (HttpRequest req, SpanMapperRegistry mappers, II
     return Results.Accepted(value: new { accepted, skipped });
 });
 
+// --- Phase 5: CloudEvents 1.0 usage-event API (coarse surfaces) ---------------
+// Accepts a CloudEvents envelope for coarse usage (RPA "AI units", seats, premium
+// requests), maps it via the CloudEvent dialect → canonical span (credit/seat/
+// request granularity), and enqueues on the same async hot path. Priced via the
+// per-unit (CoarseUnit) cost tier, not token math.
+app.MapPost("/v1/events", async (HttpRequest req, SpanMapperRegistry mappers, IIngestChannel channel, TimeProvider clock, CancellationToken ct) =>
+{
+    string body;
+    using (var reader = new StreamReader(req.Body))
+        body = await reader.ReadToEndAsync(ct);
+    if (body.Length == 0)
+        return Results.BadRequest(new { error = "empty body" });
+
+    RawIngestEvent raw;
+    try
+    {
+        raw = CloudEventParser.Parse(body, Tenant(req), clock.GetUtcNow());
+    }
+    catch (System.Text.Json.JsonException ex)
+    {
+        return Results.BadRequest(new { error = "invalid CloudEvent", detail = ex.Message });
+    }
+
+    if (!mappers.CanMap(raw.Dialect))
+        return Results.BadRequest(new { error = $"no mapper for dialect '{raw.Dialect}'" });
+    await channel.EnqueueAsync(mappers.Map(raw), ct);
+    return Results.Accepted(value: new { accepted = 1 });
+});
+
 // Ingest one gen_ai.* event → normalized, costed, stored. Returns the canonical span.
 app.MapPost("/v1/ingest", async (HttpRequest req, IngestEventDto dto, IngestionService ingest, CancellationToken ct) =>
 {

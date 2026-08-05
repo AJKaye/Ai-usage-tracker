@@ -77,13 +77,13 @@
 - [x] **`IEventStore` → embedded SQLite** (`UsageTracker.Storage.Sqlite`) — the zero-infra `.exe` backend; tenant-scoped SQL (RLS-equivalent), idempotent by `(tenant, span)`; **passes the full `EventStoreContractTests`**. Verified on this box + in the published exe (survives restart).
 - [x] **Deployment profiles + config-driven selection** at the composition root (`solo`/`ephemeral`/`standard`/`distributed`) — the one-line backend swap, ADR-0009.
 - [x] **Self-contained single-file publish** (win/linux/macOS × x64/arm64) wired into CI (`publish-exe` job); win-x64 exe built + run here.
-- [~] `IEventStore` → **ClickHouse** (typed columns, partitioning for retention/crypto-shred). *Authored against the client lib + CI service-container conformance — needs Docker; not local (no Docker/WSL/admin here).*
-- [~] `IRelationalStore` → **Postgres** (RLS, `tenant_id` every table). *Same: build + CI-verify, not local.*
-- [~] `IStreamBus` → **Kafka** (ingest topic, DLQ, consumer groups, idempotent dedup). *Same.*
+- [ ] `IEventStore` → **ClickHouse** (typed columns, partitioning for retention/crypto-shred). *Contract only — the `IEventStore` seam exists and the conformance suite is ready, but no ClickHouse implementation is written yet (infra-blocked: no Docker/WSL/admin here).*
+- [ ] `IRelationalStore` → **Postgres** (RLS, `tenant_id` every table). *Contract only (`IRelationalStore` declared in `StorageAndStream.cs`); no Npgsql implementation yet.*
+- [ ] `IStreamBus` → **Kafka** (ingest topic, DLQ, consumer groups, idempotent dedup). *Contract only (`IStreamBus` declared); no Kafka implementation yet. The in-process `IIngestChannel` is the slot-in seam.*
 - [ ] Migration tooling for the server DBs; seed/fixture loader.
 - [x] Golden-dataset harness — the canonical fixtures live in `EventStoreContractTests` (every store impl runs them).
 
-> **Verified vs pending:** the embedded/`.exe` half of Phase 1 is **done and runs on this machine**. The distributed half is blocked only by infra availability (Docker) on the dev box — the seam (contracts + conformance suite) means each server store is "implement + pass the same tests in CI," not a redesign. To finish locally: install Docker, then bring up `deploy/docker-compose.yml`.
+> **Verified vs pending (corrected 2026-08-05 after audit):** the embedded/`.exe` half of Phase 1 is **done and runs on this machine**. The distributed half is **contract-only** — the interfaces (`IRelationalStore`/`IStreamBus`) and the shared conformance suite exist, but **no ClickHouse/Postgres/Kafka code is written**; `Program.cs` fail-fasts (`NotSupportedException`) on the `standard`/`distributed` profiles rather than mis-storing. Finishing them is "implement behind the existing contract + pass the same tests in CI" — not a redesign — but it is not yet started. To do it locally: install Docker, then bring up `deploy/docker-compose.yml`.
 
 **Key modules:** Canonical Store; contracts.
 
@@ -162,18 +162,20 @@
 
 **Goal:** Cover the remaining three ingestion archetypes and the closed/coarse surfaces (`ARCHITECTURE.md` §8.3 step 3) — this is where "tracks *all* platforms and tools" becomes real.
 
-**Deliverables**
-- [ ] **OpenAI-compatible proxy** (`IProxyBackend`) — zero-instrumentation wire capture + native cost; streaming usage handled (merge `message_start`/`message_delta`; final-chunk usage).
-- [ ] **Usage-event API** — CloudEvents 1.0 ingest for coarse events (RPA units, seats), routed through the granularity path.
-- [ ] **Adapter SDK** + `IUsageAdapter` plugin contract, documented, with a template repo.
-- [ ] Reference adapters: **Cursor** (real tokens), **Claude Code** (OTel + Anthropic Admin API), **GitHub Copilot** (seats/premium requests — no tokens), **UiPath** (AI units). Each is a **plugin**, not core code.
-- [ ] RAG-pipeline coverage validated (retriever/embedding/reranker spans via OTel from Phase 2 — confirm end-to-end).
+**Deliverables** *(status 2026-08-05 — built + verified on .NET 10, 102 tests green under `-warnaserror`; branch `phase-5-multi-archetype`, stacked on Phase 4.)*
+- [x] **OpenAI-compatible proxy** (`IProxyBackend`, `UsageTracker.Ingestion.Proxy`) — zero-instrumentation forwarder over an *injected* HttpClient (no network in tests); returns upstream bytes+status verbatim + a canonical span from the wire `usage`. **Streaming SSE handled** — merges Anthropic `message_start` (input) + `message_delta` (final output), OpenAI last-chunk usage. Token math deferred to the provider-aware normalizer.
+- [x] **Usage-event API** — CloudEvents 1.0 ingest (`POST /v1/events`, `CloudEventParser` + `CloudEventMapper`) for coarse events (RPA units, seats, premium requests), routed through the credit/seat/request granularity → CoarseUnit cost path.
+- [x] **Adapter SDK** — `UsageTracker.Adapters.Reference` (adapters + `AdapterRunner` with per-(tenant,source) checkpointing + at-least-once retry-on-failure). `IUsageAdapter` plugin contract + the ALC plugin-load seam were proven in Phase 0 (`ReferenceCursor` loaded by path). *A standalone template repo is a packaging nicety, deferred.*
+- [x] Reference adapters: **Cursor** (real tokens, Phase-0 plugin), **Claude Code** (Anthropic Admin/OTel token shape — additive), **GitHub Copilot** (seats + premium requests — no tokens), **UiPath** (AI units — credits). Each maps to the correct granularity + cost path.
+- [x] RAG-pipeline coverage validated — retriever/embedding/reranker spans arrive via the Phase-2 OTLP `gen_ai.*` path and map to the 9-kind taxonomy with the token cost path; confirmed end-to-end (`RagCoverageTests`), no new code needed.
 
 **Key modules:** Ingestion Gateway; Ingestion Adapters (plugins); Normalization.
 
-**Exit criteria:** usage from at least one surface of each archetype lands in the canonical store with correct granularity and cost path.
+**Exit criteria:** usage from at least one surface of each archetype lands in the canonical store with correct granularity and cost path. **✅ Met** — proxy (wire), CloudEvents (usage-event), reference adapters (pull), OTLP RAG (from Phase 2); each priced via its correct tier.
 
-**Verification:** proxy captures a real provider round-trip incl. cost; a coarse UiPath-style unit event prices via the credit path; a third-party-style adapter built only against the SDK (no core changes) ingests successfully.
+**Verification:** proxy captures a real provider round-trip incl. cost; a coarse UiPath-style unit event prices via the credit path; a third-party-style adapter built only against the SDK (no core changes) ingests successfully. **✅** `ProxyBackendTests` (canned upstream, no network), `CloudEventTests` (UiPath AI-unit → $0.40 credit path + `/v1/events` E2E), `ReferenceAdapterTests` + `AdapterRunnerTests` (adapters built only against contracts, driven by the runner).
+
+> **Phase-5 remainder (additive):** a live proxy HTTP endpoint wired into the API host (the backend + capture are done; exposing a passthrough route is a thin add); real network calls in the adapters (they yield representative spans today, proving the SDK seam); a published adapter template repo.
 
 ---
 

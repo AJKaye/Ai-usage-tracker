@@ -23,5 +23,7 @@
     <ProjectReference Include="..\..\src\UsageTracker.Storage.Sqlite\UsageTracker.Storage.Sqlite.csproj" />
     <ProjectReference Include="..\..\src\UsageTracker.Ingestion.Otlp\UsageTracker.Ingestion.Otlp.csproj" />
     <ProjectReference Include="..\..\src\UsageTracker.Reconciliation\UsageTracker.Reconciliation.csproj" />
+    <ProjectReference Include="..\..\src\UsageTracker.Ingestion.Proxy\UsageTracker.Ingestion.Proxy.csproj" />
+    <ProjectReference Include="..\..\src\UsageTracker.Adapters.Reference\UsageTracker.Adapters.Reference.csproj" />
   </ItemGroup>
 </Project>

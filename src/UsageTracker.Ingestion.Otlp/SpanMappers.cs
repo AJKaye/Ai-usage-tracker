@@ -202,6 +202,7 @@ public sealed class SpanMapperRegistry
         {
             new GenAiSpanMapper(normalizers),
             new OpenInferenceSpanMapper(normalizers),
+            new CloudEventMapper(),
         });
 
     public bool CanMap(string dialect) => _mappers.Any(m => m.Handles(dialect));
