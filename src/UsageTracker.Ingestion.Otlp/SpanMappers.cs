@@ -64,9 +64,22 @@ public sealed class GenAiSpanMapper : ISpanMapper
             CacheReadInputTokens = Attr.Long(a, GenAi.CacheReadTokens),
             CacheCreationInputTokens = Attr.Long(a, GenAi.CacheCreationTokens),
             ReasoningOutputTokens = Attr.Long(a, GenAi.ReasoningTokens),
+            AudioTokens = Attr.Long(a, GenAi.AudioTokens),
+            ImageTokens = Attr.Long(a, GenAi.ImageTokens),
         };
         bool hasUsage = rawUsage.InputTokens is not null || rawUsage.OutputTokens is not null;
-        var usage = hasUsage ? _normalizers.Normalize(provider, rawUsage) : null;
+
+        // Coarse granularity (#15) riding OTLP via the aiusage.* extension; default Token
+        // preserves the pre-Phase-3 mapping (and every Phase-2 golden).
+        var granularity = Attr.Str(a, AiUsage.Granularity)?.ToLowerInvariant() switch
+        {
+            "credit" => Granularity.Credit,
+            "seat" => Granularity.Seat,
+            "request" => Granularity.Request,
+            _ => Granularity.Token,
+        };
+        var usage = (hasUsage && granularity == Granularity.Token)
+            ? _normalizers.Normalize(provider, rawUsage) : null;
 
         return new Span
         {
@@ -80,9 +93,17 @@ public sealed class GenAiSpanMapper : ISpanMapper
             Provider = provider,
             RequestModel = Attr.Str(a, GenAi.RequestModel),
             ResponseModel = Attr.Str(a, GenAi.ResponseModel),
-            Granularity = Granularity.Token,
+            TokenizerId = Attr.Str(a, AiUsage.Tokenizer),
+            // pricing selectors (Phase 3 composite key; null/absent = wildcard)
+            ServiceTier = Attr.Str(a, AiUsage.ServiceTier),
+            IsBatch = a.ContainsKey(AiUsage.Batch) ? Attr.Long(a, AiUsage.Batch) is 1 || string.Equals(Attr.Str(a, AiUsage.Batch), "true", StringComparison.OrdinalIgnoreCase) : null,
+            Region = Attr.Str(a, AiUsage.Region),
+            DeploymentType = Attr.Str(a, AiUsage.DeploymentType),
+            Granularity = granularity,
             RawUsage = hasUsage ? rawUsage : null,
             Usage = usage,
+            UnitsConsumed = Attr.Long(a, AiUsage.UnitsConsumed),
+            UnitType = Attr.Str(a, AiUsage.UnitType),
             StartTime = raw.ReceivedAt,
             TimeToFirstTokenMs = Attr.Dbl(a, GenAi.TimeToFirstChunkMs),
             UserId = Attr.Str(a, "user_id"),

@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace UsageTracker.Contracts;
 
 /// <summary>
@@ -31,6 +33,32 @@ public enum Granularity
     Credit,
     Seat,
     Request
+}
+
+/// <summary>
+/// How a catalog rate is metered (ARCHITECTURE.md §5 #8). The token path uses
+/// <see cref="ModelRate"/>; the coarse modes use <see cref="UnitRate"/> priced by
+/// <c>CoarseUnitCostTier</c>. Additive enum — non-breaking.
+/// </summary>
+public enum PricingMode
+{
+    PerToken,    // token buckets × ModelRate (the default token path)
+    PerUnit,     // credits / "AI units" — UnitsConsumed × PricePerUnit
+    PerRequest,  // premium requests — request count × PricePerUnit
+    PerSeat,     // seat licences — seats × PricePerUnit per period
+    PerHour      // PTU / provisioned throughput — hours × HourlyRate regardless of tokens
+}
+
+/// <summary>
+/// Context-length pricing tier (ARCHITECTURE.md §5 #5). Once a prompt crosses a
+/// model's threshold, the higher rate applies to the WHOLE request. A rate variant
+/// declares which tier it prices; <c>Any</c> matches regardless of prompt size.
+/// </summary>
+public enum ContextTier
+{
+    Any,
+    Standard,
+    Long
 }
 
 /// <summary>
@@ -78,16 +106,59 @@ public sealed record NormalizedUsage
 /// </summary>
 public sealed record CostComponent(string Kind, long Units, decimal RatePerUnit, decimal Cost);
 
+/// <summary>
+/// A count of per-call tool invocations on a span, for the tool surcharges that
+/// stack on top of token cost (ARCHITECTURE.md §5 #7: web search ~$10/1k calls,
+/// file search, code interpreter). <see cref="ToolType"/> matches a catalog
+/// surcharge key (e.g. "web_search", "code_interpreter").
+/// </summary>
+public sealed record ToolCall(string ToolType, int Count);
+
+/// <summary>
+/// The exact pricing state used to cost ONE event, snapshotted so a later
+/// recompute reproduces the original figure even after the live catalog changes
+/// (ARCHITECTURE.md §4.1 "store the rate, not just the cost"; §5 #14). Snapshots
+/// the WHOLE resolved <see cref="ModelRate"/>, so any rate dimension added later
+/// (pricing mode, context-tier, geo multiplier, modality) is captured here with
+/// no further change. All fields beyond Rate/provenance are optional so later
+/// phases fill them without a breaking change.
+/// </summary>
+public sealed record RateSnapshot
+{
+    /// <summary>The rate row that was resolved and used — the source of truth for replay.</summary>
+    public required ModelRate Rate { get; init; }
+    /// <summary><see cref="IPriceCatalogSource.SourceId"/> the rate came from ("offline-bundle", "litellm", …).</summary>
+    public required string CatalogSourceId { get; init; }
+    /// <summary>Catalog version/date stamp (mirrors <see cref="ModelRate.CatalogVersion"/>; hoisted for query/audit).</summary>
+    public required string CatalogVersion { get; init; }
+    /// <summary>UTC instant the cost was computed (≈ ingest time) — the pin for "rate in effect at event time".</summary>
+    public required DateTimeOffset CapturedAt { get; init; }
+    /// <summary>Start of the price window this rate belongs to, when the source stamps it.</summary>
+    public DateOnly? EffectiveFrom { get; init; }
+    /// <summary>Composite-key selectors in force when the rate was resolved (service_tier/region/batch/context-tier/…).</summary>
+    public IReadOnlyDictionary<string, string>? RateKey { get; init; }
+    /// <summary>#10 tokenizer drift: the tokenizer/model generation the counts were computed against.</summary>
+    public string? TokenizerId { get; init; }
+    /// <summary>SHA-256 of the signed offline pricing bundle the rate came from, when known (D6/FedRAMP).</summary>
+    public string? CatalogDigest { get; init; }
+}
+
 /// <summary>The estimated cost of one event, decomposed into line items.</summary>
 public sealed record CostBreakdown
 {
     public required decimal TotalCost { get; init; }
     public required string Currency { get; init; }
     public required IReadOnlyList<CostComponent> Components { get; init; }
-    /// <summary>Which cost tier produced this (IngestedUsd | PriceMap | Tokenized).</summary>
+    /// <summary>Which cost tier produced this (IngestedUsd | PriceMap | CoarseUnit | Tokenized | Unpriced).</summary>
     public required string Tier { get; init; }
     /// <summary>Version/date stamp of the price catalog used.</summary>
     public string? CatalogVersion { get; init; }
+    /// <summary>
+    /// The rate snapshot that produced this cost (ARCHITECTURE.md §4.1). Present for
+    /// rate-derived tiers (PriceMap); null for IngestedUsd/Unpriced, which carry no
+    /// replayable rate. Optional so pre-snapshot events still deserialize.
+    /// </summary>
+    public RateSnapshot? RateSnapshot { get; init; }
 }
 
 /// <summary>
@@ -112,11 +183,35 @@ public sealed record Span
     public string? Provider { get; init; }
     public string? RequestModel { get; init; }
     public string? ResponseModel { get; init; }
+    /// <summary>#10 tokenizer drift: the tokenizer/model generation the token counts were produced by
+    /// (e.g. "claude-tokenizer.4-8", "o200k_base"). Snapshotted so a cost change is attributable to
+    /// tokenizer drift vs a price move. Set by the Tier-3 tokenizer, or carried from the wire.</summary>
+    public string? TokenizerId { get; init; }
+
+    // --- pricing selectors (Increment 3: composite catalog key; all optional) ---
+    /// <summary>Service tier in force (e.g. "standard"|"priority"|"flex"|"scale"), a catalog key dim (#9).</summary>
+    public string? ServiceTier { get; init; }
+    /// <summary>Whether this request went through a batch API (~50% off; ARCHITECTURE.md §5 #4).</summary>
+    public bool? IsBatch { get; init; }
+    /// <summary>Cloud region — third-party model pricing varies by region (#9/#11).</summary>
+    public string? Region { get; init; }
+    /// <summary>Deployment type (e.g. "global-standard"|"data-zone"|"ptu"), a catalog key dim (#9).</summary>
+    public string? DeploymentType { get; init; }
+    /// <summary>Per-call tool invocations that add surcharges on top of token cost (#7).</summary>
+    public IReadOnlyList<ToolCall>? ToolCalls { get; init; }
 
     // --- usage (as reported) + normalized + cost ---
     public Granularity Granularity { get; init; } = Granularity.Token;
     public TokenUsage? RawUsage { get; init; }
     public NormalizedUsage? Usage { get; init; }
+    /// <summary>
+    /// TRANSIENT opt-in text used ONLY by the Tier-3 tokenize-then-price estimator when
+    /// no token counts were reported. <see cref="JsonIgnoreAttribute"/> so it is NEVER
+    /// persisted (content is PII-classified and captured separately, opt-in — §3.2).
+    /// Null in the normal path where the provider already reported usage.
+    /// </summary>
+    [JsonIgnore]
+    public string? EstimationText { get; init; }
     /// <summary>For coarse surfaces: units consumed when Granularity != Token.</summary>
     public long? UnitsConsumed { get; init; }
     public string? UnitType { get; init; }

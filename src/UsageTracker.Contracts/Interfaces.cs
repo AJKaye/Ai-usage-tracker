@@ -36,6 +36,22 @@ public interface ICostEngine
     CostBreakdown? Cost(Span span);
 }
 
+/// <summary>
+/// Recomputes a stored event's cost two ways (ARCHITECTURE.md §4.1, §5 #14):
+/// from its snapshot (stable across catalog changes) or against the live catalog
+/// (what it would cost today). Backs the Phase-3 verification: "recomputing a
+/// historical day after a price change reproduces the original cost."
+/// </summary>
+public interface ICostRecomputer
+{
+    /// <summary>Reproduce the original cost from the rate snapshotted on the span; stable across
+    /// live-catalog changes. Returns null when the span carries no cost to replay.</summary>
+    CostBreakdown? RecomputeFromSnapshot(Span span);
+
+    /// <summary>Re-cost against the CURRENT live catalog — the "what it costs today" / re-baseline path.</summary>
+    CostBreakdown? RecomputeFromLiveCatalog(Span span);
+}
+
 /// <summary>A resolved set of rates for one (model, …) composite key.</summary>
 public sealed record ModelRate
 {
@@ -48,6 +64,59 @@ public sealed record ModelRate
     /// <summary>Defaults to the output rate when unset (reasoning bills as output).</summary>
     public decimal? ReasoningPerToken { get; init; }
     public required string CatalogVersion { get; init; }
+
+    // --- provenance (Increment 1: rate snapshotting / date-effective; default = current behavior) ---
+    /// <summary>Which <see cref="IPriceCatalogSource"/> produced this rate ("offline-bundle", …).</summary>
+    public string SourceId { get; init; } = "";
+    /// <summary>Start of the price window this rate is effective from (#14 date-effective). Null = always.</summary>
+    public DateOnly? EffectiveFrom { get; init; }
+    /// <summary>Exclusive end of the price window; null = open-ended.</summary>
+    public DateOnly? EffectiveTo { get; init; }
+
+    // --- pricing mode + additive rates (Increment 4; defaults preserve token behavior) ---
+    /// <summary>How this rate is metered (#8). PerToken (default) uses the token buckets;
+    /// PerHour prices <see cref="HourlyRate"/> × elapsed hours regardless of tokens.</summary>
+    public PricingMode Mode { get; init; } = PricingMode.PerToken;
+    /// <summary>Multiplier applied to the token subtotal (#9 geo/residency/service-tier uplift,
+    /// e.g. 1.1 for inference_geo:"us"). Default 1.0 = no change.</summary>
+    public decimal Multiplier { get; init; } = 1.0m;
+    /// <summary>Per-token rate for audio modality when priced distinctly (#6). Null = fall back to input rate.</summary>
+    public decimal? AudioPerToken { get; init; }
+    /// <summary>Per-token rate for image modality when priced distinctly (#6). Null = fall back to input rate.</summary>
+    public decimal? ImagePerToken { get; init; }
+    /// <summary>Hourly rate for PerHour mode (#8 PTU / provisioned throughput / fine-tuned hosting).</summary>
+    public decimal? HourlyRate { get; init; }
+
+    // --- composite-key selectors (Increment 3; a null/Any/false dim is a wildcard that matches anything) ---
+    /// <summary>Which context-length tier this variant prices (#5). Any = size-independent.</summary>
+    public ContextTier ContextTier { get; init; } = ContextTier.Any;
+    /// <summary>Total-input-token threshold above which the whole request re-rates to the Long tier (#5).</summary>
+    public long? LongContextThresholdTokens { get; init; }
+    /// <summary>Which batch state this variant prices (#4). False = the non-batch base rate.</summary>
+    public bool IsBatch { get; init; }
+    /// <summary>Which service tier this variant prices (#9). Null = any.</summary>
+    public string? ServiceTier { get; init; }
+    /// <summary>Which region this variant prices (#9/#11). Null = any.</summary>
+    public string? Region { get; init; }
+    /// <summary>Which deployment type this variant prices (#9). Null = any.</summary>
+    public string? DeploymentType { get; init; }
+}
+
+/// <summary>
+/// A resolved per-unit rate for a coarse (non-Token) surface (ARCHITECTURE.md §5
+/// #15 / #8). Parallel to <see cref="ModelRate"/> but single-rate, keyed on
+/// <see cref="UnitType"/> and optionally scoped by provider/model. New record —
+/// non-breaking.
+/// </summary>
+public sealed record UnitRate
+{
+    public required string UnitType { get; init; }        // "ai_unit" | "premium_request" | "copilot_seat" | ...
+    public required PricingMode Mode { get; init; }       // PerUnit | PerRequest | PerSeat
+    public required decimal PricePerUnit { get; init; }   // USD per one unit
+    public string Currency { get; init; } = "USD";
+    public string? Provider { get; init; }                // optional scope (null = any)
+    public string? Model { get; init; }                   // optional scope (e.g. per-model premium-request rate)
+    public required string CatalogVersion { get; init; }
 }
 
 /// <summary>
@@ -59,6 +128,37 @@ public interface IPriceCatalog
 {
     ModelRate? Resolve(Span span);
     string Version { get; }
+
+    /// <summary>Resolve a per-unit rate for a coarse (non-Token) span. Default null keeps
+    /// existing implementors non-breaking (ARCHITECTURE.md §5 #15).</summary>
+    UnitRate? ResolveUnit(Span span) => null;
+
+    /// <summary>Per-call USD surcharge for a tool type (ARCHITECTURE.md §5 #7, e.g. web_search).
+    /// Default null = no surcharge for this catalog.</summary>
+    decimal? ToolSurcharge(string toolType) => null;
+}
+
+/// <summary>
+/// Estimates token counts from raw text for the Tier-3 tokenize-then-price path
+/// (ARCHITECTURE.md §4.1 tier 3). A heuristic default ships now; a real BPE
+/// tokenizer (tiktoken o200k_base, the Claude tokenizer) plugs in behind this
+/// later. <see cref="Id"/> is recorded on the span for tokenizer-drift attribution (#10).
+/// </summary>
+public interface ITokenizer
+{
+    string Id { get; }
+    long CountTokens(string text);
+}
+
+/// <summary>
+/// Verifies a signed offline pricing bundle for air-gapped/FedRAMP operation
+/// (ARCHITECTURE.md §4.3, D6). Throws if the signature is invalid; returns the
+/// bundle's SHA-256 digest on success, so a recompute can prove it used rates
+/// from a signature-verified bundle.
+/// </summary>
+public interface IBundleVerifier
+{
+    string VerifyAndDigest(byte[] bundleBytes, byte[] signature);
 }
 
 /// <summary>
@@ -70,6 +170,14 @@ public interface IPriceCatalogSource
 {
     IReadOnlyList<ModelRate> Load();
     string SourceId { get; }
+
+    /// <summary>Per-unit rates (credits/seats/requests) from the SAME bundle. Default empty =
+    /// non-breaking (ARCHITECTURE.md §5 #15).</summary>
+    IReadOnlyList<UnitRate> LoadUnits() => Array.Empty<UnitRate>();
+
+    /// <summary>Per-call tool surcharges (tool type → USD/call) from the SAME bundle
+    /// (ARCHITECTURE.md §5 #7). Default empty = non-breaking.</summary>
+    IReadOnlyDictionary<string, decimal> LoadToolSurcharges() => new Dictionary<string, decimal>();
 }
 
 /// <summary>

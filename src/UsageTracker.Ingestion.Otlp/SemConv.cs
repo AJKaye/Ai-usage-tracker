@@ -28,8 +28,35 @@ internal static class GenAi
     public const string CacheCreationTokens = "gen_ai.usage.cache_creation.input_tokens";
     public const string ReasoningTokens = "gen_ai.usage.reasoning.output_tokens";
 
+    // usage (modality — priced distinctly per §5 #6)
+    public const string AudioTokens = "gen_ai.usage.audio.tokens";
+    public const string ImageTokens = "gen_ai.usage.image.tokens";
+
     // timing
     public const string TimeToFirstChunkMs = "gen_ai.response.time_to_first_chunk_ms";
+}
+
+/// <summary>
+/// Tracker-owned extension keys for pricing dimensions that OpenTelemetry
+/// <c>gen_ai.*</c> has no attribute for (service tier, batch, region, deployment,
+/// tool-call counts, tokenizer id, coarse granularity/units). Namespaced
+/// <c>aiusage.*</c> so they never collide with a future standard key, and pinned
+/// here like every other key so a producer emits the agreed names (§5 #4/#7/#8/#9/#15,
+/// #10). All optional; absence preserves the pre-Phase-3 mapping behavior.
+/// </summary>
+internal static class AiUsage
+{
+    // composite-key pricing selectors
+    public const string ServiceTier = "aiusage.service_tier";
+    public const string Batch = "aiusage.batch";
+    public const string Region = "aiusage.region";
+    public const string DeploymentType = "aiusage.deployment_type";
+    // tokenizer-drift attribution (#10)
+    public const string Tokenizer = "aiusage.tokenizer";
+    // coarse surfaces (#15) — non-token granularity riding OTLP
+    public const string Granularity = "aiusage.granularity";      // "credit"|"seat"|"request"
+    public const string UnitsConsumed = "aiusage.units_consumed";
+    public const string UnitType = "aiusage.unit_type";
 }
 
 /// <summary>

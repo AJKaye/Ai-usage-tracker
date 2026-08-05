@@ -24,6 +24,16 @@ public sealed record IngestEventDto
     [JsonPropertyName("gen_ai.usage.cache_read.input_tokens")] public long? CacheReadInputTokens { get; init; }
     [JsonPropertyName("gen_ai.usage.cache_creation.input_tokens")] public long? CacheCreationInputTokens { get; init; }
     [JsonPropertyName("gen_ai.usage.reasoning.output_tokens")] public long? ReasoningOutputTokens { get; init; }
+    [JsonPropertyName("gen_ai.usage.audio.tokens")] public long? AudioTokens { get; init; }
+    [JsonPropertyName("gen_ai.usage.image.tokens")] public long? ImageTokens { get; init; }
+
+    // pricing selectors (Phase 3 composite key; all optional)
+    [JsonPropertyName("aiusage.service_tier")] public string? ServiceTier { get; init; }
+    [JsonPropertyName("aiusage.batch")] public bool? IsBatch { get; init; }
+    [JsonPropertyName("aiusage.region")] public string? Region { get; init; }
+    [JsonPropertyName("aiusage.deployment_type")] public string? DeploymentType { get; init; }
+    [JsonPropertyName("aiusage.tokenizer")] public string? Tokenizer { get; init; }
+    [JsonPropertyName("aiusage.tool_calls")] public List<ToolCallDto>? ToolCalls { get; init; }
 
     // identity / tree
     [JsonPropertyName("trace_id")] public string? TraceId { get; init; }
@@ -55,7 +65,12 @@ public sealed record IngestEventDto
         CacheReadInputTokens = CacheReadInputTokens,
         CacheCreationInputTokens = CacheCreationInputTokens,
         ReasoningOutputTokens = ReasoningOutputTokens,
+        AudioTokens = AudioTokens,
+        ImageTokens = ImageTokens,
     };
+
+    public IReadOnlyList<ToolCall>? ToToolCalls() =>
+        ToolCalls?.Select(t => new ToolCall(t.ToolType, t.Count)).ToList();
 
     public static SpanKind ParseKind(string? kind) => kind?.ToLowerInvariant() switch
     {
@@ -78,4 +93,11 @@ public sealed record IngestEventDto
         "request" => Contracts.Granularity.Request,
         _ => Contracts.Granularity.Token,
     };
+}
+
+/// <summary>A per-call tool invocation on the wire (ARCHITECTURE.md §5 #7).</summary>
+public sealed record ToolCallDto
+{
+    [JsonPropertyName("tool_type")] public string ToolType { get; init; } = "";
+    [JsonPropertyName("count")] public int Count { get; init; }
 }

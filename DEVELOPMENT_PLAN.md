@@ -119,19 +119,21 @@
 
 **Goal:** Turn normalized usage into **estimated cost** via the 3-tier engine over a modular, versioned catalog.
 
-**Deliverables**
-- [ ] `ICostTier` pipeline: (1) ingested-USD → (2) price-map → (3) tokenize-then-price; each tier independently testable/replaceable.
-- [ ] `IPriceCatalog` with the **composite key** (model × token-category × service_tier × context-tier × modality × batch/geo × deployment-type × region) and **date-stamped/versioned rates**.
-- [ ] `IPriceCatalogSource` with **two implementations**: live-sync (cloud pricing APIs where they exist — Google Catalog, Azure Retail, AWS Price List) and **signed offline bundle** import (air-gap, D6/FedRAMP). Seed from LiteLLM's `model_prices_and_context_window.json`.
-- [ ] **Rate snapshotting** — store the exact rate used per event, so historical recompute is stable.
-- [ ] Handlers for the §5 gotchas: multi-rate inputs, reasoning-as-output, batch discount, tiered/context pricing, modality, tool surcharges, per-hour (`pricing_mode`), region/tier multipliers, tokenizer drift.
-- [ ] Per-`granularity` pricing path (tokens vs credits vs seats vs requests) — even before coarse surfaces land, so Phase 5 plugs in.
+**Deliverables** *(status 2026-08-05 — built + verified on .NET 10, 76 tests green under `-warnaserror`; branch `phase-3-cost-engine`. Full design: `docs/phase-3-cost-engine-design.md`.)*
+- [x] `ICostTier` pipeline: (1) ingested-USD → (2) price-map → (2.5) coarse-unit → (3) tokenize-then-price → (fallback) unpriced; each tier independently testable/replaceable (`IngestedUsd`=10, `PriceMap`=20, `CoarseUnit`=30, `Tokenized`=40, `Unpriced`=90).
+- [x] `IPriceCatalog` with the **composite key** (model × context-tier × service_tier × batch × region × deployment-type) and **date-stamped/versioned rates** — multiple rate *variants* per model, most-specific-wins + date-effective resolution.
+- [~] `IPriceCatalogSource` implementations: `OfflineBundleCatalogSource` (extended), **`LiteLLMCatalogSource`** (parses `model_prices_and_context_window.json`), and **`HttpCatalogSource`** (live-sync over an *injected* `HttpMessageHandler` — no real network in tests). **Signed offline bundle** import done (`SignedOfflineBundleSource` + `EcdsaBundleVerifier`, D6/FedRAMP). *Cloud-specific SKU parsers (Google Catalog / Azure Retail / AWS Price List shapes) are a later add behind the same seam.*
+- [x] **Rate snapshotting** — `RateSnapshot` stores the whole resolved `ModelRate` + provenance per event; `ICostRecomputer` reproduces the original cost from the snapshot (stable) or re-prices against the live catalog. `/v1/spans/{id}/recompute`.
+- [x] Handlers for the §5 gotchas: multi-rate inputs (#2), reasoning-as-output (#3), batch discount (#4), tiered/context pricing whole-request re-rate (#5), modality (#6), tool surcharges (#7), per-hour `pricing_mode` (#8), region/tier multipliers (#9), cloud-set/region variants (#11), tokenizer drift (#10), date-effective (#14). *(#12 reconciliation = Phase 4; #13 response quirks = Phase 2/5 parsing.)*
+- [x] Per-`granularity` pricing path (tokens vs credits vs seats vs requests) — `CoarseUnitCostTier` + `UnitRate`, so Phase 5 coarse surfaces plug in with no engine change.
 
 **Key modules:** Cost Engine; Price Catalog.
 
-**Exit criteria:** every event carries an estimated cost with its snapshotted rate; a golden "gotcha suite" priced against hand-computed expected values passes.
+**Exit criteria:** every event carries an estimated cost with its snapshotted rate; a golden "gotcha suite" priced against hand-computed expected values passes. **✅ Met** — see the §5 gotcha matrix in `docs/phase-3-cost-engine-design.md`; 76 tests green.
 
-**Verification:** gotcha golden tests (one case per §5 item) green; swapping the catalog source from live to offline-bundle is a config change; recomputing a historical day after a price change reproduces the original cost.
+**Verification:** gotcha golden tests (one case per §5 item) green; swapping the catalog source from live to offline-bundle is a config change; recomputing a historical day after a price change reproduces the original cost. **✅** golden suites green (`RateSnapshotTests`, `CoarseUnitCostTests`, `CompositeKeyCatalogTests`, `AdditiveCostTests`, `CatalogSourceAndTier3Tests`, `Phase3WireFlowTests`); recompute-after-price-change reproduces the original (`RateSnapshotTests.Recompute_after_price_change...`); source swap is a DI/config change.
+
+> **Phase-3 remainder:** cloud-provider-specific pricing-API parsers (Google/Azure/AWS SKU shapes) behind the existing `IPriceCatalogSource` seam; a real BPE tokenizer (tiktoken/Claude) behind `ITokenizer` in place of the heuristic. Both are additive — no redesign.
 
 ---
 

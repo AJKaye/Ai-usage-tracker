@@ -21,7 +21,12 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton(TokenNormalizerRegistry.CreateDefault());
 builder.Services.AddSingleton<IPriceCatalogSource>(_ => OfflineBundleCatalogSource.Seed());
 builder.Services.AddSingleton<IPriceCatalog>(sp => new PriceCatalog(sp.GetRequiredService<IPriceCatalogSource>()));
-builder.Services.AddSingleton<ICostEngine>(sp => TieredCostEngine.CreateDefault(sp.GetRequiredService<IPriceCatalog>()));
+builder.Services.AddSingleton<ICostEngine>(sp => TieredCostEngine.CreateDefault(
+    sp.GetRequiredService<IPriceCatalog>(), sp.GetRequiredService<TimeProvider>()));
+// Historical recompute (ARCHITECTURE §4.1 / §5 #14): reproduce a stored event's cost
+// from its rate snapshot, or re-price it against today's live catalog.
+builder.Services.AddSingleton<ICostRecomputer>(sp =>
+    new SnapshotCostRecomputer(sp.GetRequiredService<ICostEngine>()));
 
 // The ONLY line that changes per deployment tier — every profile satisfies IEventStore.
 builder.Services.AddSingleton<IEventStore>(_ => profile switch
@@ -126,6 +131,19 @@ app.MapGet("/v1/spans/{spanId}", async (HttpRequest req, string spanId, IEventSt
 {
     var span = await store.GetAsync(Tenant(req), spanId, ct);
     return span is null ? Results.NotFound() : Results.Ok(span);
+});
+
+// Recompute a stored span's cost from its rate snapshot (stable) or against the
+// live catalog (what it costs today) — the §5 #14 historical-recompute surface.
+app.MapGet("/v1/spans/{spanId}/recompute", async (HttpRequest req, string spanId, string? mode,
+        IEventStore store, ICostRecomputer rc, CancellationToken ct) =>
+{
+    var span = await store.GetAsync(Tenant(req), spanId, ct);
+    if (span is null) return Results.NotFound();
+    var cost = string.Equals(mode, "live", StringComparison.OrdinalIgnoreCase)
+        ? rc.RecomputeFromLiveCatalog(span)
+        : rc.RecomputeFromSnapshot(span);
+    return Results.Ok(new { spanId, mode = mode ?? "snapshot", original = span.EstimatedCost, recomputed = cost });
 });
 
 // Query spans for the tenant.
