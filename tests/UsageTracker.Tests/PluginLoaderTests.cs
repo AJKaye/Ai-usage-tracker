@@ -12,15 +12,21 @@ namespace UsageTracker.Tests;
 public class PluginLoaderTests
 {
     // Walk up from the test bin dir to the repo root, then to the built plugin dll.
+    // Config (Debug/Release) + TFM are derived from THIS assembly's own output path,
+    // not hardcoded — CI builds Release, local builds Debug, and both must resolve.
     private static string ReferencePluginPath()
     {
-        var dir = AppContext.BaseDirectory; // .../tests/UsageTracker.Tests/bin/Debug/net10.0
+        var dir = AppContext.BaseDirectory; // .../tests/UsageTracker.Tests/bin/<Config>/<tfm>/
+        // The last two path segments are <Configuration>/<TargetFramework>.
+        var tfm = new DirectoryInfo(dir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)).Name;
+        var config = new DirectoryInfo(dir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)).Parent!.Name;
+
         var root = new DirectoryInfo(dir);
         while (root is not null && !File.Exists(Path.Combine(root.FullName, "AiUsageTracker.slnx")))
             root = root.Parent;
         Assert.NotNull(root);
         var path = Path.Combine(root!.FullName, "plugins", "UsageTracker.Adapters.ReferenceCursor",
-            "bin", "Debug", "net10.0", "UsageTracker.Adapters.ReferenceCursor.dll");
+            "bin", config, tfm, "UsageTracker.Adapters.ReferenceCursor.dll");
         Assert.True(File.Exists(path), $"reference plugin not built at {path}");
         return path;
     }
@@ -94,7 +100,10 @@ public class PluginLoaderTests
     [Fact]
     public void Missing_file_is_reported_not_thrown()
     {
-        var result = new PluginLoader().TryLoad(@"C:\does\not\exist.dll");
+        // Cross-platform absent path (Windows @"C:\…" isn't "missing" on Linux — it's
+        // a valid relative name — which made this pass locally but fail on CI).
+        var missing = Path.Combine(AppContext.BaseDirectory, "does-not-exist-" + Guid.NewGuid().ToString("n") + ".dll");
+        var result = new PluginLoader().TryLoad(missing);
         Assert.False(result.Loaded);
         Assert.Equal("file not found", result.RejectionReason);
     }
