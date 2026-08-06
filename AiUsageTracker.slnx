@@ -16,6 +16,7 @@
     <Project Path="src/UsageTracker.Portability/UsageTracker.Portability.csproj" />
     <Project Path="src/UsageTracker.Reconciliation/UsageTracker.Reconciliation.csproj" />
     <Project Path="src/UsageTracker.Security/UsageTracker.Security.csproj" />
+    <Project Path="src/UsageTracker.Storage.DuckDb/UsageTracker.Storage.DuckDb.csproj" />
     <Project Path="src/UsageTracker.Storage.InMemory/UsageTracker.Storage.InMemory.csproj" />
     <Project Path="src/UsageTracker.Storage.Sqlite/UsageTracker.Storage.Sqlite.csproj" />
   </Folder>

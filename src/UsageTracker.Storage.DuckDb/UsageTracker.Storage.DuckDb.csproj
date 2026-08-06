@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Embedded COLUMNAR IEventStore for the self-contained analytics tier. DuckDB is
+       an in-process OLAP engine (vectorized, columnar) — the ClickHouse-class
+       analytics capability WITHOUT a server: the native engine ships in the package
+       and, under self-contained publish, inside the single .exe. Same zero-infra
+       story as SQLite, but SummarizeAsync aggregates in-engine (SUM/GROUP BY) so
+       roll-ups over large span sets stay fast. Passes the identical
+       EventStoreContractTests as every other store. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>UsageTracker.Storage.DuckDb</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\UsageTracker.Contracts\UsageTracker.Contracts.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- .Data.Full bundles the native DuckDB engine per-RID (self-contained). -->
+    <PackageReference Include="DuckDB.NET.Data.Full" Version="1.5.5" />
+  </ItemGroup>
+</Project>

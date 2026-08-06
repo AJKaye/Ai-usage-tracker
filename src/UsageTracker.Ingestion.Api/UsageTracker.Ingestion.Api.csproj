@@ -12,6 +12,7 @@
     <ProjectReference Include="..\UsageTracker.Cost\UsageTracker.Cost.csproj" />
     <ProjectReference Include="..\UsageTracker.Storage.InMemory\UsageTracker.Storage.InMemory.csproj" />
     <ProjectReference Include="..\UsageTracker.Storage.Sqlite\UsageTracker.Storage.Sqlite.csproj" />
+    <ProjectReference Include="..\UsageTracker.Storage.DuckDb\UsageTracker.Storage.DuckDb.csproj" />
     <ProjectReference Include="..\UsageTracker.Ingestion.Otlp\UsageTracker.Ingestion.Otlp.csproj" />
     <ProjectReference Include="..\UsageTracker.Reconciliation\UsageTracker.Reconciliation.csproj" />
     <ProjectReference Include="..\UsageTracker.FinOps\UsageTracker.FinOps.csproj" />

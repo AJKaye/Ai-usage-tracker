@@ -13,3 +13,4 @@ Each ADR captures one significant, hard-to-reverse decision: context, the decisi
 | [0007](0007-neutral-design-system.md) | B1/B2 — neutral design system + swappable chart palette | Accepted |
 | [0008](0008-inmemory-store-slice.md) | In-memory store for the slice (Docker absent) | Accepted (transitional) |
 | [0009](0009-embedded-exe-reach.md) | B3 — zero-infra downloadable `.exe` (embedded SQLite `solo` profile) | Accepted (amends D1) |
+| [0010](0010-embedded-columnar-analytics.md) | Self-contained is the product (embedded DuckDB columnar `analytics` profile); clustering is an evidence-triggered HA option | Accepted (amends D1, 0009) |

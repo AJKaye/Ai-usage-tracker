@@ -8,6 +8,7 @@ using UsageTracker.Normalization;
 using UsageTracker.Portability;
 using UsageTracker.Reconciliation;
 using UsageTracker.Security;
+using UsageTracker.Storage.DuckDb;
 using UsageTracker.Storage.InMemory;
 using UsageTracker.Storage.Sqlite;
 
@@ -143,17 +144,27 @@ builder.Services.AddSingleton<IEventStore>(_ => profile switch
         Environment.GetEnvironmentVariable("USAGETRACKER__DB")
         ?? Path.Combine(AppContext.BaseDirectory, "usage-tracker.db")),
 
+    // Embedded COLUMNAR OLAP — still zero-infra (DuckDB native lib ships in the .exe),
+    // but fast SUM/GROUP BY over large span sets. The self-contained analytics tier;
+    // pick this over 'solo' when a single node handles high analytics volume.
+    "analytics" or "duckdb" => DuckDbEventStore.ForFile(
+        Environment.GetEnvironmentVariable("USAGETRACKER__DB")
+        ?? Path.Combine(AppContext.BaseDirectory, "usage-tracker.duckdb")),
+
     // Volatile — for tests / throwaway runs.
     "ephemeral" or "test" => new InMemoryEventStore(),
 
-    // Server tiers: backends land in Phase 1 continuation (need Docker/infra).
-    // Fail fast with a clear message rather than silently mis-storing.
+    // Server tiers = MULTI-NODE HA / horizontal scale-out ONLY (ADR-0010). They are
+    // NOT a capability the self-contained build lacks — 'analytics' (DuckDB) gives
+    // columnar OLAP in-process. Reach for these only when one node genuinely can't
+    // keep up or a hard availability SLA demands failover. Infra-blocked here (need
+    // a cluster); fail fast rather than silently mis-store.
     "standard" => throw new NotSupportedException(
-        "profile 'standard' (Postgres) is authored against IRelationalStore but its IEventStore wiring is not complete yet — use 'solo' for the zero-infra build."),
+        "profile 'standard' (Postgres, multi-node) needs server infra — use 'solo'/'analytics' for the zero-infra build (self-contained, incl. columnar OLAP via 'analytics')."),
     "distributed" => throw new NotSupportedException(
-        "profile 'distributed' (ClickHouse+Kafka+Postgres) requires the server backends + infra (Docker/K8s) — use 'solo' for the zero-infra build."),
+        "profile 'distributed' (ClickHouse+Kafka+Postgres) is the multi-node HA scale tier and needs a cluster (Docker/K8s) — use 'analytics' for self-contained columnar OLAP on a single node (ADR-0010)."),
 
-    _ => throw new ArgumentException($"unknown USAGETRACKER__PROFILE '{profile}' (expected solo|ephemeral|standard|distributed)"),
+    _ => throw new ArgumentException($"unknown USAGETRACKER__PROFILE '{profile}' (expected solo|analytics|ephemeral|standard|distributed)"),
 });
 
 builder.Services.AddSingleton<IngestionService>();

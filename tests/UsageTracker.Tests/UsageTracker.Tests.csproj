@@ -29,5 +29,6 @@
     <ProjectReference Include="..\..\src\UsageTracker.Security\UsageTracker.Security.csproj" />
     <ProjectReference Include="..\..\src\UsageTracker.Mcp\UsageTracker.Mcp.csproj" />
     <ProjectReference Include="..\..\src\UsageTracker.Portability\UsageTracker.Portability.csproj" />
+    <ProjectReference Include="..\..\src\UsageTracker.Storage.DuckDb\UsageTracker.Storage.DuckDb.csproj" />
   </ItemGroup>
 </Project>
