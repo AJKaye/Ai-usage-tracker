@@ -8,7 +8,7 @@ namespace UsageTracker.Security;
 /// accidental egress (a live-sync catalog source, a billing connector) surfaces
 /// immediately in test/CI rather than silently phoning home in a locked-down deploy.
 /// </summary>
-public sealed class EgressPolicy
+public sealed class EgressPolicy : UsageTracker.Contracts.IEgressGuard
 {
     public bool AirGapped { get; }
 

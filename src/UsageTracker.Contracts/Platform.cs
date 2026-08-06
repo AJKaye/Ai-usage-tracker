@@ -62,3 +62,18 @@ public interface ISecretProvider
 {
     Task<string?> GetAsync(string name, CancellationToken ct = default);
 }
+
+/// <summary>
+/// Air-gap egress gate (PROJECT_CONTEXT.md §6, D6/FedRAMP). A component about to make
+/// an outbound network call asserts it is allowed first; in air-gap mode the impl
+/// throws so the attempt fails closed at the call site (not merely by omission).
+/// Declared in Contracts so any module (Cost live-sync, Reconciliation connectors)
+/// can depend on the guard without depending on the security module.
+/// </summary>
+public interface IEgressGuard
+{
+    /// <summary>True if the deployment is air-gapped (no outbound calls permitted on critical paths).</summary>
+    bool AirGapped { get; }
+    /// <summary>Throw if an outbound call to <paramref name="host"/> for <paramref name="purpose"/> is forbidden.</summary>
+    void AssertEgressAllowed(string host, string purpose);
+}

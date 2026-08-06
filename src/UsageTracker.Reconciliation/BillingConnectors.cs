@@ -21,17 +21,20 @@ public sealed class OpenAiBillingConnector : IBillingConnector
     private readonly HttpClient _http;
     private readonly ISecretProvider _secrets;
     private readonly string _secretNameTemplate;
+    private readonly IEgressGuard? _egress;
     public string Provider => "openai";
 
     // The secret name is a TEMPLATE that may contain "{tenant}", so pooled SaaS
     // resolves each tenant's OWN billing credential (no cross-tenant realized-cost
     // bleed). Self-host uses a literal name (tenant count = 1). Default is
     // tenant-scoped; pass a literal name for self-host if preferred.
-    public OpenAiBillingConnector(HttpClient http, ISecretProvider secrets, string secretNameTemplate = "openai.admin_key.{tenant}")
-        => (_http, _secrets, _secretNameTemplate) = (http, secrets, secretNameTemplate);
+    public OpenAiBillingConnector(HttpClient http, ISecretProvider secrets, string secretNameTemplate = "openai.admin_key.{tenant}", IEgressGuard? egress = null)
+        => (_http, _secrets, _secretNameTemplate, _egress) = (http, secrets, secretNameTemplate, egress);
 
     public async Task<IReadOnlyList<RealizedCost>> PullAsync(string tenantId, DateOnly from, DateOnly to, CancellationToken ct = default)
     {
+        // Air-gap gate: realized-cost pull is an outbound call — fail closed at the site.
+        _egress?.AssertEgressAllowed("api.openai.com", "OpenAI Costs pull");
         var secretName = _secretNameTemplate.Replace("{tenant}", tenantId);
         var key = await _secrets.GetAsync(secretName, ct)
             ?? throw new InvalidOperationException($"secret '{secretName}' not resolved — cannot pull OpenAI costs for tenant '{tenantId}'.");
@@ -102,12 +105,15 @@ public sealed class AnthropicBillingConnector : IBillingConnector
     /// <summary>cost_report omits Priority Tier — a documented understatement risk.</summary>
     public bool ExcludesPriorityTier => true;
 
+    private readonly IEgressGuard? _egress;
+
     // Tenant-scoped secret template ("{tenant}" placeholder) — see OpenAiBillingConnector.
-    public AnthropicBillingConnector(HttpClient http, ISecretProvider secrets, string secretNameTemplate = "anthropic.admin_key.{tenant}")
-        => (_http, _secrets, _secretNameTemplate) = (http, secrets, secretNameTemplate);
+    public AnthropicBillingConnector(HttpClient http, ISecretProvider secrets, string secretNameTemplate = "anthropic.admin_key.{tenant}", IEgressGuard? egress = null)
+        => (_http, _secrets, _secretNameTemplate, _egress) = (http, secrets, secretNameTemplate, egress);
 
     public async Task<IReadOnlyList<RealizedCost>> PullAsync(string tenantId, DateOnly from, DateOnly to, CancellationToken ct = default)
     {
+        _egress?.AssertEgressAllowed("api.anthropic.com", "Anthropic cost_report pull");
         var secretName = _secretNameTemplate.Replace("{tenant}", tenantId);
         var key = await _secrets.GetAsync(secretName, ct)
             ?? throw new InvalidOperationException($"secret '{secretName}' not resolved — cannot pull Anthropic cost_report for tenant '{tenantId}'.");

@@ -43,7 +43,9 @@
 
 ## Residual risks to accept or close before GA
 
-1. Audit is not yet emitted on *every* admin/data path (sink is ready) — close by adding `IAuditSink.RecordAsync` at each mutating endpoint.
-2. Per-endpoint RBAC/scope enforcement is not yet applied to all routes — close by an authorization filter keyed on the resolved `Principal`.
-3. Per-tenant rate limiting is not implemented (DoS) — close with a limiter middleware.
+1. ~~Audit not emitted on every path~~ — **CLOSED (2026-08-06):** middleware records a tamper-evident `AuditEvent` on every mutating `/v1`+`/mcp` request; `GET /v1/audit` exports + verifies. (Live-verified.)
+2. Per-endpoint RBAC/scope enforcement is not yet applied to all routes — close by an authorization filter keyed on the resolved `Principal`. *(Still open.)*
+3. Per-tenant rate limiting is not implemented (DoS) — close with a limiter middleware. *(Still open.)*
 4. All DB-enforced isolation + transport security is infra-blocked here and verified only at the app layer — close on a Docker/cluster host.
+5. ~~Air-gap egress guard decorative~~ — **CLOSED (2026-08-06):** `IEgressGuard` enforced at `HttpCatalogSource` + billing-connector call sites (fails closed under `solo`; handler provably not reached).
+6. ~~Crypto-shred/audit proven as libraries only~~ — **CLOSED (2026-08-06):** crypto-shred is a live path (`POST /v1/content` opt-in → `DELETE /v1/subjects/{id}` → content unrecoverable, aggregates persist).

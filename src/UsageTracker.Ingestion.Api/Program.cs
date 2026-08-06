@@ -111,6 +111,20 @@ builder.Services.AddSingleton<IAuditSink>(sp => sp.GetRequiredService<HashChainA
 builder.Services.AddSingleton<ITenantResolver, PrincipalTenantResolver>();
 // Subject key vault for opt-in content sealing + crypto-shredding (right-to-delete).
 builder.Services.AddSingleton<SubjectKeyVault>();
+// Data-lifecycle policy: content capture is OPT-IN, off by default (PII posture).
+// Enable per deployment via USAGETRACKER__CONTENT_CAPTURE=1 / config ContentCapture=true.
+builder.Services.AddSingleton(_ =>
+{
+    var enabled = string.Equals(builder.Configuration["ContentCapture"]
+        ?? Environment.GetEnvironmentVariable("USAGETRACKER__CONTENT_CAPTURE"), "1", StringComparison.Ordinal)
+        || string.Equals(builder.Configuration["ContentCapture"], "true", StringComparison.OrdinalIgnoreCase);
+    return new DataLifecyclePolicy
+    {
+        TenantId = "*", ResidencyRegion = "local",
+        ContentCaptureEnabled = enabled,
+    };
+});
+builder.Services.AddSingleton<ContentVaultService>();
 // Identity provider: API keys resolved from config (USAGETRACKER__APIKEYS = "key:tenant:role,...").
 // Absent config → no keys registered → the dev header path (below) is used.
 builder.Services.AddSingleton<IIdentityProvider>(_ =>
@@ -241,6 +255,31 @@ app.Use(async (ctx, next) =>
     await next();
 });
 
+// --- Phase 7 (wired): audit every mutating data request ----------------------
+// Runs after auth (so tenant + principal are resolved). Records a tamper-evident
+// AuditEvent for POST/PUT/DELETE on /v1 + /mcp — turning the hash-chain sink from a
+// tested library into enforced product behavior (SOC 2 evidence on every write).
+app.Use(async (ctx, next) =>
+{
+    await next();   // let the request run first, so we record its real outcome
+    var m = ctx.Request.Method;
+    var path = ctx.Request.Path.Value ?? "";
+    bool mutating = (HttpMethods.IsPost(m) || HttpMethods.IsPut(m) || HttpMethods.IsDelete(m))
+                    && (path.StartsWith("/v1") || path.StartsWith("/mcp"));
+    if (!mutating) return;
+    var sink = ctx.RequestServices.GetRequiredService<IAuditSink>();
+    var clock = ctx.RequestServices.GetRequiredService<TimeProvider>();
+    var tenant = ctx.Items.TryGetValue("tenant", out var t) && t is string s ? s : "default";
+    await sink.RecordAsync(new AuditEvent
+    {
+        TenantId = tenant,
+        Actor = Actor(ctx),
+        Action = $"{m} {path}",
+        At = clock.GetUtcNow(),
+        Success = ctx.Response.StatusCode is >= 200 and < 400,
+    });
+});
+
 // --- tenant resolution (Phase 7) ---
 // The auth MIDDLEWARE (below) resolves the tenant once per request and stashes it in
 // HttpContext.Items; endpoints read it synchronously here. If API keys are configured
@@ -248,6 +287,10 @@ app.Use(async (ctx, next) =>
 // client cannot assert an arbitrary tenant); keyless dev falls back to X-Tenant-Id.
 static string Tenant(HttpRequest r) =>
     r.HttpContext.Items.TryGetValue("tenant", out var t) && t is string s ? s : "default";
+
+// The authenticated subject for audit attribution, or "anonymous" in keyless dev.
+static string Actor(HttpContext ctx) =>
+    ctx.Items.TryGetValue("principal", out var p) && p is Principal pr ? pr.SubjectId : "anonymous";
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "ingestion-api", version = "0.1.0" }));
 
@@ -492,6 +535,38 @@ app.MapGet("/v1/governance", (IWebHostEnvironment env) =>
     return Results.Ok(GovernanceParser.Parse(File.ReadAllText(path)));
 });
 
+// --- Phase 7 (wired): tamper-evident audit export (SOC 2 evidence) ----------
+// The tenant's append-only audit chain + an integrity check. Tenant-scoped.
+app.MapGet("/v1/audit", (HttpRequest req, HashChainAuditSink audit) =>
+{
+    var tenant = Tenant(req);
+    return Results.Ok(new { tenant, intact = audit.Verify(tenant), entries = audit.Export(tenant) });
+});
+
+// --- Phase 7 (wired): opt-in content capture + crypto-shred right-to-delete --
+// Content is PII: capture is OFF by default and 409s unless the tenant opts in.
+// When on, prompt/response text is sealed under the subject's per-subject key.
+app.MapPost("/v1/content", (HttpRequest req, ContentDto dto, ContentVaultService vault) =>
+{
+    if (string.IsNullOrWhiteSpace(dto.SpanId) || string.IsNullOrWhiteSpace(dto.SubjectId) || dto.Content is null)
+        return Results.BadRequest(new { error = "span_id, subject_id and content are required" });
+    if (!vault.CaptureEnabled)
+        return Results.Conflict(new { error = "content capture is disabled (opt-in; set USAGETRACKER__CONTENT_CAPTURE=1)" });
+    vault.Capture(Tenant(req), dto.SpanId, dto.SubjectId, dto.Content);
+    return Results.Accepted(value: new { sealed_ = true, spanId = dto.SpanId });
+});
+
+app.MapGet("/v1/content/{spanId}", (HttpRequest req, string spanId, ContentVaultService vault) =>
+{
+    var text = vault.Reveal(Tenant(req), spanId);
+    return text is null ? Results.NotFound() : Results.Ok(new { spanId, content = text });
+});
+
+// GDPR/HIPAA right-to-delete: crypto-shred a subject → their content is permanently
+// unrecoverable; aggregates (tokens/cost) persist.
+app.MapDelete("/v1/subjects/{subjectId}", (string subjectId, ContentVaultService vault) =>
+    Results.Ok(new { subjectId, erased = vault.EraseSubject(subjectId) }));
+
 // --- Phase 9: MCP server face (JSON-RPC 2.0) --------------------------------
 // An MCP client POSTs JSON-RPC here to read its own spend live (tools/resources).
 // Tenant-scoped like every data path; the server never trusts a client tenant.
@@ -537,6 +612,14 @@ if (openWindow)
         DesktopWindow.Open(desktopUrl, app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("desktop")));
 
 app.Run();
+
+// Wire DTO for POST /v1/content (opt-in captured content, sealed per-subject).
+public sealed record ContentDto
+{
+    [System.Text.Json.Serialization.JsonPropertyName("span_id")] public string? SpanId { get; init; }
+    [System.Text.Json.Serialization.JsonPropertyName("subject_id")] public string? SubjectId { get; init; }
+    [System.Text.Json.Serialization.JsonPropertyName("content")] public string? Content { get; init; }
+}
 
 // Wire DTO for POST /v1/scores (framework-agnostic externally-computed score).
 public sealed record ScoreDto

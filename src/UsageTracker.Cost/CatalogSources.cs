@@ -88,13 +88,16 @@ public sealed class HttpCatalogSource : IPriceCatalogSource
     private readonly HttpClient _http;
     private readonly Uri _uri;
     private readonly string _version;
+    private readonly IEgressGuard? _egress;
     public string SourceId => "live-sync.http";
 
-    public HttpCatalogSource(HttpClient http, Uri uri, string version)
-        => (_http, _uri, _version) = (http, uri, version);
+    public HttpCatalogSource(HttpClient http, Uri uri, string version, IEgressGuard? egress = null)
+        => (_http, _uri, _version, _egress) = (http, uri, version, egress);
 
     public IReadOnlyList<ModelRate> Load()
     {
+        // Air-gap gate: fail closed at the call site before any outbound request.
+        _egress?.AssertEgressAllowed(_uri.Host, "live-sync price catalog");
         // Synchronous over the injected client — sources load once at startup, off
         // the hot path. GetAwaiter().GetResult() is acceptable for a boot-time pull.
         var json = _http.GetStringAsync(_uri).GetAwaiter().GetResult();
