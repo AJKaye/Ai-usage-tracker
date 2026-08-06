@@ -88,9 +88,9 @@
 
 **Key modules:** Canonical Store; contracts.
 
-**Exit criteria:** a canonical event round-trips through Kafka → ClickHouse and is queryable; swapping `IEventStore` to an in-memory fake requires only DI config (proves modularity).
+**Exit criteria** *(reframed 2026-08-06, ADR-0010):* a canonical event round-trips through the selected `IEventStore` and is queryable; swapping the store is a config change only (proves modularity). **✅ Met self-contained** — three stores (InMemory, SQLite `solo`, **DuckDB `analytics`**) all pass the same conformance suite and are selected by `USAGETRACKER__PROFILE`. The Kafka→ClickHouse round-trip is the **multi-node scale-tier** equivalent (infra-blocked; same contract, to be CI-verified with service containers when built).
 
-**Verification:** integration tests write and read events across all three engines; RLS blocks cross-tenant reads in a two-tenant fixture; an in-memory `IEventStore` passes the same contract test suite as the ClickHouse one.
+**Verification:** `EventStoreContractTests` (tenant-scoped, no cross-tenant read) runs against **every** store impl — InMemory, SQLite, and DuckDB — proving the seam. *Cross-engine (server) integration tests + RLS-in-a-two-tenant-fixture are the infra-blocked scale-tier verification.*
 
 ---
 
@@ -233,7 +233,7 @@
 **Goal:** The React + TypeScript SPA (D4), including the owner-requested **Regulatory Governance page**.
 
 **Deliverables** *(status 2026-08-05 — SPA builds clean (Vite, TS strict); .NET 139 tests green under `-warnaserror`; branch `phase-8-web-ui`. Live-verified: zero-infra exe serves the UI + governance.)*
-- [x] React + TS SPA scaffold (`web/`, Vite + React 18 + TS strict); **consumes the design-system role tokens** (`tokens.css` vendored from `dist/`) as the sole styling source — no raw hex/px; tenant + `data-theme` (white-label) + light/dark switch in the shell. *Auth via platform SSO is the additive remainder (the client sends tenant/bearer; full OIDC login flow is Phase-7-adjacent).*
+- [x] React + TS SPA scaffold (`web/`, Vite + React 18 + TS strict); **consumes the design-system role tokens** (`tokens.css` vendored from `dist/`) — **all color/space/radius/shadow via `var(--*)`, zero raw hex** (so a theme/white-label/light-dark swap restyles everything). *(Raw `px` remain for a few font-sizes + hairline borders — cosmetic, doesn't affect theming; the no-raw-px stylelint gate is the CI remainder, see the `TODO` in `ci.yml`.)* Tenant + `data-theme` + light/dark switch in the shell. *Auth via platform SSO is the additive remainder (the client sends tenant/bearer; full OIDC login flow is Phase-7-adjacent).*
 - [~] Core dashboards: cost (spend + by provider/model), allocation (tag-free, dimension switch, 100%-of-spend bars), efficiency (latency/TTFT/cache/error + unit economics), Regulatory Governance — built from role tokens. *Session→Trace→Span drill-down + estimated-vs-reconciled delta view are additive (the data/endpoints exist; deeper chart UIs to follow).*
 - [x] **Regulatory Governance page** — styled from tokens; renders the control register (SOC 2 / GDPR / HIPAA / FedRAMP) sourced live from **`GET /v1/governance`** (parses `GOVERNANCE.md`), so it **never drifts** — a status change in the file shows with no code edit. Status-count tiles + per-control table.
 - [x] Accessibility baseline per `design-system/specs/accessibility.md`: semantic nav/table markup, `aria-label`s on controls, focus-visible via tokens, `prefers-reduced-motion` honored globally. *Full axe/WCAG AA audit is part of the CI-gate remainder.*

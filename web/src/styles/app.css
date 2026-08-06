@@ -1,7 +1,9 @@
-/* AI Usage Tracker SPA styling — references ONLY design-system ROLE tokens
-   (var(--color-*), var(--space-*), var(--radius-*), var(--shadow-*)). No raw
-   hex/px, so a theme swap (data-theme) or light/dark restyles the whole app with
-   zero edits here — the design-system distribution contract. */
+/* AI Usage Tracker SPA styling — all theming primitives come from design-system
+   ROLE tokens: every color/space/radius/shadow is var(--color-*|--space-*|
+   --radius-*|--shadow-*), with ZERO raw hex. That is the distribution contract —
+   a theme swap (data-theme) or light/dark restyles the whole app with zero edits
+   here. (A few raw px remain for font-sizes + hairline borders; they don't affect
+   a theme swap. Wiring a no-raw-px stylelint gate is the CI remainder.) */
 
 * { box-sizing: border-box; }
 

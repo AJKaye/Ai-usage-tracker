@@ -265,11 +265,11 @@ Seed rates (`claude-opus-5`): in `5e-6`, out `25e-6`, cacheRead `5e-7`, cacheCre
 
 | # | Gotcha | Status | Golden case — input → **hand-computed expected** |
 |---|---|---|---|
-| 1 | subset-vs-additive tokens | **COVERED** (Phase 2 normalizer goldens) | additive: 200+600+200 → in 1000; subset: 1000 w/ 600 cache → uncached 400 |
+| 1 | subset-vs-additive tokens | **COVERED** (Phase 2 normalizer goldens) | additive (Anthropic): uncached 400 + cache-read 600 + cache-create 200 → true input **1200**; subset (OpenAI): input 1000 w/ 600 cached → uncached 400 *(as committed in `TokenNormalizerGoldenTests`)* |
 | 2 | multiple input rates at once | **COVERED** (`Cache_read_and_creation_priced_separately`) | 200·5e-6 + 600·5e-7 + 200·6.25e-6 = **0.00255** |
 | 3 | reasoning bills at output | **COVERED** (`Reasoning_tokens_billed_at_output_rate`) | (1000−400)·25e-6 + 400·25e-6 = **0.025** |
 | 4 | batch ~50% off | **NEW** | opus-5 batch variant out `12.5e-6`; 1000 in/500 out batch → 1000·2.5e-6 + 500·12.5e-6 = **0.00875** (½ of 0.0175) |
-| 5 | tiered/context (whole request) | **NEW** | threshold 200k, long-out `37.5e-6`; input 201000 → **whole** request re-rated long: 201000·7.5e-6 + 500·37.5e-6 = **1.526250**; input 199000 → base |
+| 5 | tiered/context (whole request) | **NEW** | threshold 200k; base in `3e-6`/out `15e-6`, long in `6e-6`/out `30e-6`. input 199000 → base: 199000·3e-6 + 500·15e-6 = **0.6045**; input 201000 → **whole** request re-rated long: 201000·6e-6 + 500·30e-6 = **1.221** *(as committed in `CompositeKeyCatalogTests.Long_context_rerates_the_whole_request`)* |
 | 6 | modality priced differently | **NEW** | audioPerToken `100e-6`; 1000 audio + 0 text → 1000·100e-6 = **0.10**, as its own component |
 | 7 | tool surcharges stack | **NEW** | chat (0.0175 tokens) + 3 web_search @ $0.01/call → 0.0175 + 3·0.01 = **0.0475**; surcharge components present |
 | 8 | non-token regimes (per_hour/unit/request) | **NEW** | PTU `HourlyRate=$5`, span 2.5h → **12.50** regardless of tokens; per_unit/request/seat via Tier-30 (#15) |
