@@ -192,6 +192,28 @@ public interface IEventStore
     Task<Span?> GetAsync(string tenantId, string spanId, CancellationToken ct = default);
     Task<IReadOnlyList<Span>> QueryAsync(SpanQuery query, CancellationToken ct = default);
     Task<UsageSummary> SummarizeAsync(SpanQuery query, CancellationToken ct = default);
+
+    /// <summary>
+    /// Per-day cost rollup over the query window (honoring <see cref="SpanQuery.Since"/>/
+    /// <see cref="SpanQuery.Until"/>) — the time series budgets/anomaly/forecast consume
+    /// (FinOps control plane, ARCHITECTURE.md §6). Default = query + in-process bucketing,
+    /// so existing stores keep compiling; SQLite/DuckDB override with GROUP BY date() for
+    /// analytics-scale aggregation. Ascending by day; days with no spend are omitted.
+    /// </summary>
+    async Task<IReadOnlyList<DailyCost>> SummarizeByDayAsync(SpanQuery query, CancellationToken ct = default)
+    {
+        var spans = await QueryAsync(query with { Limit = int.MaxValue }, ct);
+        return spans
+            .Where(s => s.EstimatedCost is not null)
+            .GroupBy(s => DateOnly.FromDateTime(s.StartTime.UtcDateTime))
+            .OrderBy(g => g.Key)
+            .Select(g => new DailyCost(
+                g.Key,
+                g.Sum(s => s.EstimatedCost!.TotalCost),
+                g.Count(),
+                g.Select(s => s.EstimatedCost!.Currency).FirstOrDefault() ?? "USD"))
+            .ToList();
+    }
 }
 
 /// <summary>A tenant-scoped query over spans (kept intentionally small for the slice).</summary>
@@ -200,9 +222,15 @@ public sealed record SpanQuery
     public required string TenantId { get; init; }
     public string? TraceId { get; init; }
     public string? Provider { get; init; }
+    /// <summary>Inclusive lower time bound (event StartTime ≥ Since).</summary>
     public DateTimeOffset? Since { get; init; }
+    /// <summary>Exclusive upper time bound (event StartTime &lt; Until) — for bounded historical windows.</summary>
+    public DateTimeOffset? Until { get; init; }
     public int Limit { get; init; } = 100;
 }
+
+/// <summary>One day's estimated-cost rollup (FinOps time series for trend/anomaly/forecast).</summary>
+public sealed record DailyCost(DateOnly Day, decimal Cost, long SpanCount, string Currency);
 
 /// <summary>Rolled-up totals for a query window — the seed of the cost/usage dashboards.</summary>
 public sealed record UsageSummary

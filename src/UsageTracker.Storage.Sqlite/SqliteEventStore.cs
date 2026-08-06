@@ -145,6 +145,7 @@ public sealed class SqliteEventStore : IEventStore, IDisposable
         if (q.TraceId is { } tr) { sql += " AND trace_id=$tr"; cmd.Parameters.AddWithValue("$tr", tr); }
         if (q.Provider is { } pv) { sql += " AND provider=$pv COLLATE NOCASE"; cmd.Parameters.AddWithValue("$pv", pv); }
         if (q.Since is { } since) { sql += " AND start_time>=$since"; cmd.Parameters.AddWithValue("$since", since.ToString("O")); }
+        if (q.Until is { } until) { sql += " AND start_time<$until"; cmd.Parameters.AddWithValue("$until", until.ToString("O")); }
         sql += " ORDER BY start_time DESC LIMIT $lim;";
         cmd.Parameters.AddWithValue("$lim", q.Limit);
         cmd.CommandText = sql;
@@ -193,6 +194,38 @@ public sealed class SqliteEventStore : IEventStore, IDisposable
             CostByProvider = byProvider,
             CostByModel = byModel,
         };
+    }
+
+    // Per-day cost rollup (FinOps time series). start_time is ISO-8601, so the date is
+    // the first 10 chars (YYYY-MM-DD) and groups lexically. total_cost is stored as an
+    // invariant decimal string (exact money) — so we group in SQL and sum the decimals
+    // in-process per day rather than let SQLite coerce TEXT→float.
+    public Task<IReadOnlyList<DailyCost>> SummarizeByDayAsync(SpanQuery q, CancellationToken ct = default)
+    {
+        using var c = Open();
+        using var cmd = c.CreateCommand();
+        var sql = "SELECT substr(start_time,1,10) AS d, total_cost, currency FROM spans WHERE tenant_id=$t AND total_cost IS NOT NULL";
+        cmd.Parameters.AddWithValue("$t", q.TenantId);
+        if (q.Since is { } since) { sql += " AND start_time>=$since"; cmd.Parameters.AddWithValue("$since", since.ToString("O")); }
+        if (q.Until is { } until) { sql += " AND start_time<$until"; cmd.Parameters.AddWithValue("$until", until.ToString("O")); }
+        cmd.CommandText = sql + ";";
+
+        var cost = new Dictionary<DateOnly, decimal>();
+        var count = new Dictionary<DateOnly, long>();
+        string currency = "USD";
+        using (var r = cmd.ExecuteReader())
+            while (r.Read())
+            {
+                var day = DateOnly.Parse(r.GetString(0), System.Globalization.CultureInfo.InvariantCulture);
+                cost[day] = cost.GetValueOrDefault(day)
+                    + decimal.Parse(r.GetString(1), System.Globalization.CultureInfo.InvariantCulture);
+                count[day] = count.GetValueOrDefault(day) + 1;
+                if (!r.IsDBNull(2)) currency = r.GetString(2);
+            }
+
+        IReadOnlyList<DailyCost> series = cost.Keys.OrderBy(d => d)
+            .Select(d => new DailyCost(d, cost[d], count[d], currency)).ToList();
+        return Task.FromResult(series);
     }
 
     public void Dispose() => _keepAlive.Dispose();

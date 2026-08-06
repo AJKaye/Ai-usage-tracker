@@ -129,6 +129,7 @@ public sealed class DuckDbEventStore : IEventStore, IDisposable
             if (q.TraceId is { } tr) { ps.Add(tr); sql += $" AND trace_id=${ps.Count}"; }
             if (q.Provider is { } pv) { ps.Add(pv); sql += $" AND lower(provider)=lower(${ps.Count})"; }
             if (q.Since is { } since) { ps.Add(since.UtcDateTime); sql += $" AND start_time>=${ps.Count}"; }
+            if (q.Until is { } until) { ps.Add(until.UtcDateTime); sql += $" AND start_time<${ps.Count}"; }
             ps.Add(q.Limit); sql += $" ORDER BY start_time DESC LIMIT ${ps.Count};";
             cmd.CommandText = sql;
             foreach (var p in ps) cmd.Parameters.Add(new DuckDBParameter(p));
@@ -202,6 +203,40 @@ public sealed class DuckDbEventStore : IEventStore, IDisposable
             map[r.GetString(0)] = ToDecimal(r.GetValue(1));
         }
         return map;
+    }
+
+    // Per-day cost rollup — COLUMNAR in-engine (CAST date + SUM + GROUP BY), the
+    // analytics-tier win over the default per-row bucketing. Honors Since/Until.
+    public Task<IReadOnlyList<DailyCost>> SummarizeByDayAsync(SpanQuery q, CancellationToken ct = default)
+    {
+        lock (_gate)
+        {
+            using var cmd = _keepAlive.CreateCommand();
+            var sql = @"SELECT CAST(start_time AS DATE) AS d,
+                               COALESCE(SUM(total_cost),0) AS c,
+                               COUNT(*) AS n,
+                               COALESCE(MAX(currency),'USD') AS cur
+                        FROM spans WHERE tenant_id=$1 AND total_cost IS NOT NULL";
+            var ps = new List<object> { q.TenantId };
+            if (q.Since is { } since) { ps.Add(since.UtcDateTime); sql += $" AND start_time>=${ps.Count}"; }
+            if (q.Until is { } until) { ps.Add(until.UtcDateTime); sql += $" AND start_time<${ps.Count}"; }
+            sql += " GROUP BY d ORDER BY d;";
+            cmd.CommandText = sql;
+            foreach (var p in ps) cmd.Parameters.Add(new DuckDBParameter(p));
+
+            var list = new List<DailyCost>();
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+            {
+                // DuckDB CAST(... AS DATE) surfaces as System.DateOnly; take it directly
+                // (fall back to DateTime for any driver that returns a timestamp).
+                var raw = r.GetValue(0);
+                var day = raw is DateOnly d ? d
+                    : DateOnly.FromDateTime(Convert.ToDateTime(raw, CultureInfo.InvariantCulture));
+                list.Add(new DailyCost(day, ToDecimal(r.GetValue(1)), ToLong(r.GetValue(2)), r.GetString(3)));
+            }
+            return Task.FromResult<IReadOnlyList<DailyCost>>(list);
+        }
     }
 
     // DuckDB returns integer SUM() as System.Numerics.BigInteger (and other numeric

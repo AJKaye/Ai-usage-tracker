@@ -96,6 +96,29 @@ public abstract class EventStoreContractTests
         Assert.Equal(0, sum.SpanCount);
         Assert.Equal(0m, sum.TotalEstimatedCost);
     }
+
+    [Fact]
+    public async Task SummarizeByDay_buckets_cost_per_day_ascending_and_tenant_scoped()
+    {
+        var store = CreateStore();
+        var d1 = new DateTimeOffset(2026, 8, 1, 9, 0, 0, TimeSpan.Zero);
+        var d2 = new DateTimeOffset(2026, 8, 2, 9, 0, 0, TimeSpan.Zero);
+        // two spans on day 1 (0.01 each), one on day 2 — each MakeSpan cost is 0.01.
+        // (spanIds end in a digit — MakeSpan derives minutes from the last char.)
+        await store.AppendAsync(MakeSpan("dt", "dayA-1") with { StartTime = d1 });
+        await store.AppendAsync(MakeSpan("dt", "dayB-2") with { StartTime = d1 });
+        await store.AppendAsync(MakeSpan("dt", "dayC-3") with { StartTime = d2 });
+        await store.AppendAsync(MakeSpan("other", "dayD-4") with { StartTime = d1 });   // other tenant
+
+        var series = await store.SummarizeByDayAsync(new SpanQuery { TenantId = "dt" });
+
+        Assert.Equal(2, series.Count);
+        Assert.Equal(new DateOnly(2026, 8, 1), series[0].Day);      // ascending
+        Assert.Equal(new DateOnly(2026, 8, 2), series[1].Day);
+        Assert.Equal(0.02m, series[0].Cost);                        // 2 × 0.01
+        Assert.Equal(2, series[0].SpanCount);
+        Assert.Equal(0.01m, series[1].Cost);                        // other tenant's span excluded
+    }
 }
 
 /// <summary>Runs the full contract suite against the in-memory implementation.</summary>

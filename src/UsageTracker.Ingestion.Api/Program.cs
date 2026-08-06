@@ -48,6 +48,7 @@ builder.Services.AddSingleton(TokenNormalizerRegistry.CreateDefault());
 // Air-gap egress policy (D6): solo/ephemeral fail-closed on any outbound call.
 var egress = EgressPolicy.ForProfile(profile);
 builder.Services.AddSingleton(egress);
+builder.Services.AddSingleton<IEgressGuard>(egress);   // the contract other modules depend on
 
 // Pricing catalog source. Review finding #1: if a signing public key + bundle are
 // configured (USAGETRACKER__PRICING_BUNDLE / __PRICING_BUNDLE_SIG / __PRICING_PUBKEY),
@@ -103,6 +104,20 @@ builder.Services.AddSingleton(sp => new McpServer(sp.GetRequiredService<IMcpUsag
 // --- Phase 10: backup/restore + data portability (also the migration substrate) ---
 builder.Services.AddSingleton(sp => new DataPortabilityService(
     sp.GetRequiredService<IEventStore>(), sp.GetRequiredService<TimeProvider>()));
+
+// --- Phase 11: FinOps control plane (budgets / alerts / anomaly / forecast) --
+builder.Services.AddSingleton<IBudgetStore, InMemoryBudgetStore>();
+builder.Services.AddSingleton<IAlertSink, InMemoryAlertSink>();
+// Optional outbound alert webhook — OFF unless USAGETRACKER__ALERT_WEBHOOK is set.
+// Gated by IEgressGuard, so it fails closed in solo/air-gap regardless.
+var alertWebhook = builder.Configuration["AlertWebhook"]
+    ?? Environment.GetEnvironmentVariable("USAGETRACKER__ALERT_WEBHOOK");
+if (!string.IsNullOrWhiteSpace(alertWebhook))
+    builder.Services.AddSingleton<INotifier>(sp => new WebhookNotifier(
+        new HttpClient(), new Uri(alertWebhook), sp.GetRequiredService<IEgressGuard>()));
+// Background evaluator: scans budgets + anomalies per tenant on an interval.
+builder.Services.AddSingleton<BudgetScanService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<BudgetScanService>());
 
 // --- Phase 7: security platform services -------------------------------------
 // Tamper-evident audit sink (SOC 2 evidence) — always on.
@@ -512,6 +527,86 @@ app.MapPost("/v1/scores", async (HttpRequest req, ScoreDto dto, IScoreSink sink,
 app.MapGet("/v1/spans/{spanId}/scores", async (HttpRequest req, string spanId, IScoreSink sink, CancellationToken ct) =>
     Results.Ok(await sink.GetForSpanAsync(Tenant(req), spanId, ct)));
 
+// --- Phase 11: FinOps control plane API (budgets / status / anomalies / forecast / alerts) ---
+// Turns the passive views above into an active control plane. All tenant-scoped; the
+// mutating routes are audited for free by the middleware. Evaluation reuses the pure
+// BudgetEvaluator/CostAnomalyDetector/SpendForecaster over the tenant's spans.
+
+// CRUD budgets. POST upserts (client-supplied id → update; else server assigns one).
+app.MapGet("/v1/budgets", async (HttpRequest req, IBudgetStore store, CancellationToken ct) =>
+    Results.Ok(await store.ListAsync(Tenant(req), ct)));
+
+app.MapPost("/v1/budgets", async (HttpRequest req, BudgetDto dto, IBudgetStore store, CancellationToken ct) =>
+{
+    if (dto.Limit is not > 0)
+        return Results.BadRequest(new { error = "limit must be greater than zero" });
+    var period = string.Equals(dto.Period, "daily", StringComparison.OrdinalIgnoreCase)
+        ? BudgetPeriod.Daily : BudgetPeriod.Monthly;
+    var budget = new Budget
+    {
+        Id = string.IsNullOrWhiteSpace(dto.Id) ? Guid.NewGuid().ToString("n") : dto.Id!,
+        TenantId = Tenant(req),
+        Dimension = dto.Dimension ?? "",
+        DimensionValue = string.IsNullOrWhiteSpace(dto.DimensionValue) ? null : dto.DimensionValue,
+        Limit = dto.Limit!.Value,
+        Currency = string.IsNullOrWhiteSpace(dto.Currency) ? "USD" : dto.Currency!,
+        Period = period,
+        WarnAtFraction = dto.WarnAtFraction is > 0 and < 1 ? dto.WarnAtFraction!.Value : 0.8,
+    };
+    await store.UpsertAsync(budget, ct);
+    return Results.Ok(budget);
+});
+
+app.MapDelete("/v1/budgets/{budgetId}", async (HttpRequest req, string budgetId, IBudgetStore store, CancellationToken ct) =>
+{
+    await store.DeleteAsync(Tenant(req), budgetId, ct);
+    return Results.Ok(new { deleted = budgetId });
+});
+
+// Live evaluation: each budget vs its current-period spend → spent/utilization/state/projection.
+app.MapGet("/v1/budgets/status", async (HttpRequest req, IBudgetStore budgets, IEventStore store, TimeProvider clock, CancellationToken ct) =>
+{
+    var tenant = Tenant(req);
+    var today = DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime);
+    var defs = await budgets.ListAsync(tenant, ct);
+    var statuses = new List<BudgetStatus>(defs.Count);
+    foreach (var b in defs)
+    {
+        var start = BudgetEvaluator.PeriodStart(b.Period, today);
+        var since = new DateTimeOffset(start.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+        var spans = await store.QueryAsync(new SpanQuery { TenantId = tenant, Since = since, Limit = int.MaxValue }, ct);
+        statuses.Add(BudgetEvaluator.Evaluate(b, spans, today));
+    }
+    return Results.Ok(statuses);
+});
+
+// Cost anomalies over the tenant's trailing daily series (?baselineDays, ?k, ?lookbackDays).
+app.MapGet("/v1/anomalies", async (HttpRequest req, int? baselineDays, double? k, int? lookbackDays,
+        IEventStore store, TimeProvider clock, CancellationToken ct) =>
+{
+    var today = DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime);
+    var look = lookbackDays is > 0 ? lookbackDays.Value : 30;
+    var since = new DateTimeOffset(today.AddDays(-look).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+    var series = await store.SummarizeByDayAsync(new SpanQuery { TenantId = Tenant(req), Since = since }, ct);
+    var anomaly = CostAnomalyDetector.Detect(series, baselineDays is > 0 ? baselineDays.Value : 7, k is > 0 ? k.Value : 3.0);
+    return Results.Ok(new { anomaly, series });
+});
+
+// Month-to-date spend + run-rate projection for the current calendar month.
+app.MapGet("/v1/forecast", async (HttpRequest req, IEventStore store, TimeProvider clock, CancellationToken ct) =>
+{
+    var today = DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime);
+    var monthStart = new DateTimeOffset(new DateOnly(today.Year, today.Month, 1).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+    var mtd = await store.SummarizeByDayAsync(new SpanQuery { TenantId = Tenant(req), Since = monthStart }, ct);
+    var spent = mtd.Sum(d => d.Cost);
+    var projected = SpendForecaster.ForecastMonth(mtd, today);
+    return Results.Ok(new { month = $"{today.Year:0000}-{today.Month:00}", spentToDate = spent, projectedEndOfMonth = projected, series = mtd });
+});
+
+// In-app alert feed (works in every profile, incl. air-gapped). ?limit caps the recent window.
+app.MapGet("/v1/alerts", async (HttpRequest req, int? limit, IAlertSink sink, CancellationToken ct) =>
+    Results.Ok(await sink.RecentAsync(Tenant(req), limit is > 0 ? limit.Value : 100, ct)));
+
 // --- Phase 8: Regulatory Governance matrix (backs the in-product governance page) ---
 // Parsed live from GOVERNANCE.md so the page never drifts from the maintained source.
 // Public (compliance disclosure). GOVERNANCE.md is copied next to the exe at publish;
@@ -619,6 +714,18 @@ public sealed record ContentDto
     [System.Text.Json.Serialization.JsonPropertyName("span_id")] public string? SpanId { get; init; }
     [System.Text.Json.Serialization.JsonPropertyName("subject_id")] public string? SubjectId { get; init; }
     [System.Text.Json.Serialization.JsonPropertyName("content")] public string? Content { get; init; }
+}
+
+// Wire DTO for POST /v1/budgets (a spend limit; snake_case JSON like the other DTOs).
+public sealed record BudgetDto
+{
+    [System.Text.Json.Serialization.JsonPropertyName("id")] public string? Id { get; init; }
+    [System.Text.Json.Serialization.JsonPropertyName("dimension")] public string? Dimension { get; init; }
+    [System.Text.Json.Serialization.JsonPropertyName("dimension_value")] public string? DimensionValue { get; init; }
+    [System.Text.Json.Serialization.JsonPropertyName("limit")] public decimal? Limit { get; init; }
+    [System.Text.Json.Serialization.JsonPropertyName("currency")] public string? Currency { get; init; }
+    [System.Text.Json.Serialization.JsonPropertyName("period")] public string? Period { get; init; }   // "daily" | "monthly"
+    [System.Text.Json.Serialization.JsonPropertyName("warn_at_fraction")] public double? WarnAtFraction { get; init; }
 }
 
 // Wire DTO for POST /v1/scores (framework-agnostic externally-computed score).

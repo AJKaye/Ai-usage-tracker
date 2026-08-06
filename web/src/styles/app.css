@@ -94,9 +94,10 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 /* --- status chips (governance) --- */
 .chip { display: inline-block; padding: 2px var(--space-3); border-radius: var(--radius-full); font-size: 12px; font-weight: 600; }
-.chip.verified, .chip.implemented { background: var(--color-feedback-success-subtle); color: var(--color-feedback-success-fg); }
-.chip.scaffolded { background: var(--color-feedback-warning-subtle); color: var(--color-feedback-warning-fg); }
+.chip.verified, .chip.implemented, .chip.ok { background: var(--color-feedback-success-subtle); color: var(--color-feedback-success-fg); }
+.chip.scaffolded, .chip.warning { background: var(--color-feedback-warning-subtle); color: var(--color-feedback-warning-fg); }
 .chip.designed { background: var(--color-bg-muted); color: var(--color-text-secondary); }
+.chip.exceeded { background: var(--color-feedback-danger-subtle); color: var(--color-feedback-danger-fg); }
 
 .muted { color: var(--color-text-muted); }
 .small { font-size: 12px; }

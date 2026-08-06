@@ -80,6 +80,7 @@ public sealed class InMemoryEventStore : IEventStore
         if (q.TraceId is { } t) spans = spans.Where(s => s.TraceId == t);
         if (q.Provider is { } p) spans = spans.Where(s => string.Equals(s.Provider, p, StringComparison.OrdinalIgnoreCase));
         if (q.Since is { } since) spans = spans.Where(s => s.StartTime >= since);
+        if (q.Until is { } until) spans = spans.Where(s => s.StartTime < until);
         return spans;
     }
 }

@@ -230,6 +230,18 @@ Adopt these FOCUS column names for the reconciled-cost layer:
 - Model quality as a generic **"score"** object (name + value: numeric/categorical/boolean) attached to a span/trace, from four sources: **LLM-as-judge**, **code/deterministic evaluators**, **human annotation queues**, **end-user feedback** (thumbs/comments).
 - **Recommended positioning: be the score *aggregator*, not the eval engine** (Helicone's stance). Ingest externally-computed scores from any framework via a `POST .../score` endpoint; don't own the judge. This keeps the tracker framework-agnostic and avoids competing with the eval platforms.
 
+### 6.4 Active control plane — budgets, alerts, anomaly detection, forecasting *(built: Phase 11)*
+
+Everything in §6.1–6.3 is **passive reporting** — it tells you what you spent/allocated *after the fact*. The enterprise FinOps buyer also expects **active control**: guardrails that act on the numbers. This is the first thing a budget owner asks for, and the tracker provides it self-contained (works in every profile incl. air-gapped), reusing the allocation + cost seams above:
+
+- **Budgets** — a spend limit scoped to a dimension (whole-tenant, or one team/model/provider/environment value, reusing §6.2 tag-free dimension keys) over a period (daily/monthly). `IBudgetStore` (embedded now; durable later behind the same contract).
+- **Budget evaluation** — spend-to-date for the scope+period vs the limit → **utilization**, **run-rate projected end-of-period**, **state** (ok/warning/exceeded). Pure/deterministic, golden-testable.
+- **Anomaly detection** — flag a day whose spend deviates from its **trailing-N-day baseline** by more than *k* standard deviations (z-score). Transparent statistical, not ML — explainable and deterministic. A perfectly flat baseline flags any increase (z undefined → null).
+- **Forecast** — project period-end spend = spend-to-date + avg-daily-run-rate × days-remaining. The FinOps-standard linear projection; explainable.
+- **Alerts** — a background evaluator scans budgets + anomalies per tenant on an interval and writes an **in-app alert feed** (works air-gapped), de-duped so the same budget-state/anomaly-day doesn't re-alert. An **optional outbound webhook** (Slack/Teams/generic) is gated by the §11/D6 egress guard, so it **fails closed under air-gap** — alerts stay in the in-app feed when egress is denied.
+
+Budgets/alerts reuse the **estimated** cost layer (§4); budget-vs-**reconciled** (§8.3 step 2) is a follow-up once the cloud billing connectors land. Real ML forecasting is explicitly out of scope — transparent statistics are the deliberate choice for auditability.
+
 ---
 
 ## 7. Ingesting from closed / coarse surfaces (adapters, not proxies)

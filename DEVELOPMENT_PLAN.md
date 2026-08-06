@@ -292,6 +292,29 @@
 
 ---
 
+## Phase 11 — FinOps Control Plane (budgets · alerts · anomaly · forecast)
+
+**Goal:** Turn the tracker from a **passive reporting hub** (it tells you what you spent/allocated after the fact) into an **active control plane** — set budgets, get alerted before you blow them, catch cost spikes automatically, and see a month-end forecast. The first thing an enterprise FinOps buyer expects, and a gap absent from §6 and every prior phase. See `docs/adr/0011-finops-control-plane.md`.
+
+**Deliverables** *(status 2026-08-06 — built + tested end-to-end, 198 tests green under `-warnaserror`; branch `feat-finops-control-plane`. Self-contained: works in every profile incl. air-gapped.)*
+- [x] **Budgets** — a tenant sets a spend limit scoped to a dimension (whole-tenant, or per team/model/provider/environment) over a period (daily/monthly), via `IBudgetStore` (`InMemoryBudgetStore`; durable store satisfies the same contract later). CRUD over `GET/POST/DELETE /v1/budgets(+/{id})`.
+- [x] **Budget evaluation** — `BudgetEvaluator.Evaluate` (pure): spend-to-date for the budget's scope+period vs limit → utilization %, run-rate projected end-of-period, state (ok/warning/exceeded). Reuses `DimensionAllocationStrategy.KeyFor` (tag-free scoping) + `CostPerTokenMetric.TotalCost`. Live at `GET /v1/budgets/status`.
+- [x] **Anomaly detection** — `CostAnomalyDetector.Detect` (pure): z-score of the latest day vs a trailing-N-day baseline (mean ± k·stddev); flags outliers, explainable, deterministic. A perfectly flat baseline (zero variance) flags any increase with a null z-score (undefined). `GET /v1/anomalies`.
+- [x] **Forecast** — `SpendForecaster.ForecastMonth` (pure): spend-to-date + avg-daily-run-rate × days-remaining. `GET /v1/forecast`.
+- [x] **Alerts** — `BudgetScanService : BackgroundService` (mirrors `IngestConsumer`: poison-isolated, `PeriodicTimer` + injected `TimeProvider`) scans budgets + anomalies per tenant, writes an in-app `IAlertSink` feed (`GET /v1/alerts`, works in every profile incl. air-gapped), de-dupes per (budget, period, state) / anomaly-day, and — only if `USAGETRACKER__ALERT_WEBHOOK` is set — POSTs via an `IEgressGuard`-gated `WebhookNotifier` that **fails closed under air-gap**.
+- [x] **Data-model seam** — `SpanQuery.Until` (exclusive upper bound) + `IEventStore.SummarizeByDayAsync` (per-day cost series) added as a **default interface method** (query + in-process bucketing), overridden with `GROUP BY date()` pushdown in `SqliteEventStore` and columnar SQL in `DuckDbEventStore`; all three still pass `EventStoreContractTests`.
+- [x] **Budgets & Alerts SPA page** — `web/src/pages/Budgets.tsx`: forecast tiles, budget list with utilization bars + status chips (`ok`/`warning`/`exceeded`), create-budget form, anomaly panel, alert feed. Role tokens only (no raw hex); one nav link + routes.
+
+**Key modules:** `UsageTracker.FinOps` (evaluator/detector/forecaster/stores/notifier), `UsageTracker.Contracts` (Budget/BudgetStatus/IBudgetStore/Alert/IAlertSink/INotifier/AnomalyResult/DailyCost + SpanQuery.Until/SummarizeByDayAsync), `UsageTracker.Ingestion.Api` (endpoints + `BudgetScanService`), `web/`.
+
+**Exit criteria:** a tenant can create a budget, see live status, receive an in-app `budget_exceeded` alert when spend crosses the limit, get a month-end forecast, and have a seeded cost spike flagged — all tenant-scoped, all self-contained.
+
+**Verification:** unit goldens (`BudgetEvaluatorTests`, `AnomalyForecastTests`); `EventStoreContractTests` `SummarizeByDayAsync` across InMemory/SQLite/DuckDB; `BudgetApiEndToEndTests` (create → ingest → status exceeded → scan raises alert → de-dupe → forecast → seeded anomaly → tenant isolation); `WebhookNotifier` fails closed under a `solo` `IEgressGuard`; live-verify on the published exe.
+
+**Out of scope (deferred, not re-scoped):** real ML forecasting; budget-vs-**reconciled** cost (follows the cloud billing connectors — budgets reuse the *estimated* cost layer today); OIDC/SAML/SCIM; per-endpoint RBAC filter + rate limiting. Same deferrals as the acknowledged scale-tier remainder.
+
+---
+
 ## Continuous workstreams (every phase, not a phase)
 
 - **Security:** threat-model updates, dependency/secret/SBOM scanning in CI, per-endpoint authZ + audit + tenancy, `GOVERNANCE.md` kept current.
