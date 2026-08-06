@@ -49,11 +49,55 @@ jobs:
           -c Release -r ${{ matrix.rid }} --self-contained true
           -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
           -o publish/${{ matrix.rid }}
+
+      # Download→run→works smoke: the primary integration path must actually boot.
+      # Only the natively-runnable RIDs (host arch) can execute on the runner.
+      - name: Smoke — run the binary and hit /health (native RIDs only)
+        if: matrix.rid == 'win-x64' || matrix.rid == 'linux-x64' || matrix.rid == 'osx-arm64'
+        shell: bash
+        env:
+          USAGETRACKER__PROFILE: solo
+          USAGETRACKER__NO_WINDOW: '1'
+          ASPNETCORE_URLS: http://127.0.0.1:5199
+        run: |
+          exe="publish/${{ matrix.rid }}/usage-tracker"
+          [ -f "$exe.exe" ] && exe="$exe.exe"
+          chmod +x "$exe" 2>/dev/null || true
+          "$exe" &
+          pid=$!
+          ok=0
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:5199/health >/dev/null 2>&1; then ok=1; break; fi
+            sleep 0.5
+          done
+          curl -fsS http://127.0.0.1:5199/v1/platform/stats || true
+          kill $pid 2>/dev/null || true
+          if [ "$ok" != "1" ]; then echo "::error::binary did not serve /health"; exit 1; fi
+          echo "smoke OK: ${{ matrix.rid }} downloaded-and-runs"
+
+      # Signed release: SHA-256 checksums + a detached signature over them. The
+      # signing key is provided as a repo secret (RELEASE_SIGNING_KEY, base64 PKCS#8
+      # ECDSA-P256); if absent (forks/PRs) we still publish + checksum, just unsigned.
+      - name: Checksums + detached signature
+        shell: bash
+        run: |
+          cd publish/${{ matrix.rid }}
+          if command -v sha256sum >/dev/null 2>&1; then sha256sum usage-tracker* > SHA256SUMS; else shasum -a 256 usage-tracker* > SHA256SUMS; fi
+          cat SHA256SUMS
+          if [ -n "${{ secrets.RELEASE_SIGNING_KEY }}" ]; then
+            echo "${{ secrets.RELEASE_SIGNING_KEY }}" | base64 -d > signing_key.pem
+            openssl dgst -sha256 -sign signing_key.pem -out SHA256SUMS.sig SHA256SUMS && rm signing_key.pem
+            echo "signed SHA256SUMS.sig"
+          else
+            echo "no RELEASE_SIGNING_KEY secret — publishing unsigned (set the secret to sign releases)."
+          fi
+
       - uses: actions/upload-artifact@v4
         with:
           name: usage-tracker-${{ matrix.rid }}
           path: |
             publish/${{ matrix.rid }}/usage-tracker*
+            publish/${{ matrix.rid }}/SHA256SUMS*
             !publish/${{ matrix.rid }}/*.pdb
 
   design-system:

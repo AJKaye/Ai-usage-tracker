@@ -13,6 +13,7 @@
     <Project Path="src/UsageTracker.Mcp/UsageTracker.Mcp.csproj" />
     <Project Path="src/UsageTracker.Normalization/UsageTracker.Normalization.csproj" />
     <Project Path="src/UsageTracker.Plugins/UsageTracker.Plugins.csproj" />
+    <Project Path="src/UsageTracker.Portability/UsageTracker.Portability.csproj" />
     <Project Path="src/UsageTracker.Reconciliation/UsageTracker.Reconciliation.csproj" />
     <Project Path="src/UsageTracker.Security/UsageTracker.Security.csproj" />
     <Project Path="src/UsageTracker.Storage.InMemory/UsageTracker.Storage.InMemory.csproj" />

@@ -5,6 +5,7 @@ using UsageTracker.FinOps;
 using UsageTracker.Ingestion.Otlp;
 using UsageTracker.Mcp;
 using UsageTracker.Normalization;
+using UsageTracker.Portability;
 using UsageTracker.Reconciliation;
 using UsageTracker.Security;
 using UsageTracker.Storage.InMemory;
@@ -98,6 +99,10 @@ builder.Services.AddSingleton<IScoreSink, InMemoryScoreSink>();
 builder.Services.AddSingleton<IMcpUsageProvider>(sp => new McpUsageProvider(sp.GetRequiredService<IEventStore>()));
 builder.Services.AddSingleton(sp => new McpServer(sp.GetRequiredService<IMcpUsageProvider>()));
 
+// --- Phase 10: backup/restore + data portability (also the migration substrate) ---
+builder.Services.AddSingleton(sp => new DataPortabilityService(
+    sp.GetRequiredService<IEventStore>(), sp.GetRequiredService<TimeProvider>()));
+
 // --- Phase 7: security platform services -------------------------------------
 // Tamper-evident audit sink (SOC 2 evidence) — always on.
 builder.Services.AddSingleton<HashChainAuditSink>();
@@ -160,9 +165,15 @@ builder.Services.AddSingleton(sp =>
     SpanMapperRegistry.CreateDefault(sp.GetRequiredService<TokenNormalizerRegistry>()));
 builder.Services.AddSingleton<ChannelIngest>();
 builder.Services.AddSingleton<IIngestChannel>(sp => sp.GetRequiredService<ChannelIngest>());
-builder.Services.AddHostedService<IngestConsumer>();
+// Register the consumer as a shared singleton AND as the hosted service, so the
+// self-observability endpoint reads the SAME instance's counters.
+builder.Services.AddSingleton<IngestConsumer>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<IngestConsumer>());
 
 var app = builder.Build();
+
+// Process start (self-observability uptime). Set here — Date.Now at composition time.
+var startedAt = app.Services.GetRequiredService<TimeProvider>().GetUtcNow();
 
 app.Logger.LogInformation("AI Usage Tracker starting — profile='{Profile}'", profile);
 
@@ -186,6 +197,7 @@ app.Use(async (ctx, next) =>
     bool isDataPath = path.StartsWithSegments("/v1") || path.StartsWithSegments("/mcp");
     if (path.StartsWithSegments("/health")
         || path.StartsWithSegments("/v1/governance")
+        || path.StartsWithSegments("/v1/platform")
         || !isDataPath)
     {
         await next();
@@ -227,6 +239,25 @@ static string Tenant(HttpRequest r) =>
     r.HttpContext.Items.TryGetValue("tenant", out var t) && t is string s ? s : "default";
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "ingestion-api", version = "0.1.0" }));
+
+// --- Phase 10: platform self-observability (dogfood; public ops signal) -------
+// Uptime + ingest throughput + queue depth + backend tier — the on-call/SLO signal.
+app.MapGet("/v1/platform/stats", (ChannelIngest channel, IngestConsumer consumer, IEventStore store, TimeProvider clock) =>
+    Results.Ok(new
+    {
+        service = "ai-usage-tracker",
+        version = "0.1.0",
+        profile,
+        store = store.GetType().Name,
+        uptimeSeconds = (long)(clock.GetUtcNow() - startedAt).TotalSeconds,
+        ingest = new
+        {
+            enqueued = channel.Enqueued,
+            processed = consumer.Processed,
+            failed = consumer.Failed,
+            queueDepth = channel.QueueDepth,
+        },
+    }));
 
 // --- Phase 2: OTLP/HTTP trace ingestion (the real OpenTelemetry wire shape) ---
 // Accepts an ExportTraceServiceRequest JSON body (resourceSpans→scopeSpans→spans
@@ -458,6 +489,31 @@ app.MapPost("/mcp", async (HttpRequest req, McpServer mcp, CancellationToken ct)
     using var doc = await System.Text.Json.JsonDocument.ParseAsync(req.Body, cancellationToken: ct);
     var response = await mcp.HandleAsync(doc.RootElement, Tenant(req), ct);
     return response is null ? Results.NoContent() : Results.Ok(response);   // null = JSON-RPC notification
+});
+
+// --- Phase 10: data export / import (backup-restore + solo→distributed migration) ---
+// GET /v1/export → a portable JSON bundle of the tenant's data (download it as backup,
+// or feed it to another store to migrate). POST /v1/import restores/loads a bundle
+// (idempotent by (tenant, span)). Tenant-scoped like every data path.
+app.MapGet("/v1/export", async (HttpRequest req, DataPortabilityService port, CancellationToken ct) =>
+{
+    var json = await port.ExportJsonAsync(Tenant(req), ct);
+    return Results.Text(json, "application/json");
+});
+
+app.MapPost("/v1/import", async (HttpRequest req, DataPortabilityService port, CancellationToken ct) =>
+{
+    using var reader = new StreamReader(req.Body);
+    var json = await reader.ReadToEndAsync(ct);
+    if (string.IsNullOrWhiteSpace(json)) return Results.BadRequest(new { error = "empty bundle" });
+    try
+    {
+        return Results.Ok(await port.ImportJsonAsync(Tenant(req), json, ct));
+    }
+    catch (Exception ex) when (ex is NotSupportedException or ArgumentException or System.Text.Json.JsonException)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
 });
 
 // SPA fallback: any non-API, non-file route serves index.html so client-side routing

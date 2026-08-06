@@ -18,6 +18,7 @@ namespace UsageTracker.Ingestion.Api;
 public sealed class ChannelIngest : IIngestChannel
 {
     private readonly Channel<Span> _channel;
+    private long _enqueued;
 
     public ChannelIngest(int capacity = 10_000)
     {
@@ -30,10 +31,19 @@ public sealed class ChannelIngest : IIngestChannel
     }
 
     public async Task EnqueueAsync(Span span, CancellationToken ct = default)
-        => await _channel.Writer.WriteAsync(span, ct);
+    {
+        await _channel.Writer.WriteAsync(span, ct);
+        Interlocked.Increment(ref _enqueued);
+    }
 
     /// <summary>Consumed by the background service.</summary>
     internal ChannelReader<Span> Reader => _channel.Reader;
+
+    // --- self-observability (Phase 10: dogfood platform stats) ---
+    /// <summary>Total spans accepted onto the channel since start.</summary>
+    public long Enqueued => Interlocked.Read(ref _enqueued);
+    /// <summary>Current queue depth (accepted but not yet drained) — a backpressure signal.</summary>
+    public int QueueDepth => _channel.Reader.Count;
 }
 
 /// <summary>
@@ -47,6 +57,8 @@ public sealed class IngestConsumer : BackgroundService
     private readonly ICostEngine _cost;
     private readonly IEventStore _store;
     private readonly ILogger<IngestConsumer> _log;
+    private long _processed;
+    private long _failed;
 
     public IngestConsumer(ChannelIngest channel, ICostEngine cost, IEventStore store, ILogger<IngestConsumer> log)
     {
@@ -56,6 +68,12 @@ public sealed class IngestConsumer : BackgroundService
         _log = log;
     }
 
+    // --- self-observability (Phase 10) ---
+    /// <summary>Spans successfully costed + persisted since start.</summary>
+    public long Processed => Interlocked.Read(ref _processed);
+    /// <summary>Spans that failed to persist (poison events, isolated).</summary>
+    public long Failed => Interlocked.Read(ref _failed);
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         await foreach (var span in _channel.Reader.ReadAllAsync(stoppingToken))
@@ -64,6 +82,7 @@ public sealed class IngestConsumer : BackgroundService
             {
                 var costed = span with { EstimatedCost = _cost.Cost(span) };
                 await _store.AppendAsync(costed, stoppingToken);
+                Interlocked.Increment(ref _processed);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -73,6 +92,7 @@ public sealed class IngestConsumer : BackgroundService
             {
                 // A poison event must not kill the consumer. In the distributed
                 // tier this is a Kafka dead-letter; here we log and continue.
+                Interlocked.Increment(ref _failed);
                 _log.LogError(ex, "ingest consumer failed to persist span {SpanId} (tenant {Tenant})",
                     span.SpanId, span.TenantId);
             }

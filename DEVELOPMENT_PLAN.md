@@ -2,7 +2,7 @@
 
 > **Read [`PROJECT_CONTEXT.md`](./PROJECT_CONTEXT.md) first** — it holds the mission, the six locked decisions (D1–D6), the non-negotiable principles, and the module map this plan executes against. This document is the *how and when*. [`ARCHITECTURE.md`](./ARCHITECTURE.md) is the *what and why*.
 
-**Last updated:** 2026-08-04 · **Overall status:** Phase 0 substantially done; Phase 1 embedded tier built + verified (zero-infra `.exe`), distributed tier infra-blocked. See per-phase status.
+**Last updated:** 2026-08-06 · **Overall status:** **Phases 0–10 complete for the `solo` (zero-infra) tier** — GA-ready as a downloadable single-file `.exe` with the full pipeline (ingest → normalize → cost → reconcile → allocate → serve → UI → MCP), 166 tests green under `-warnaserror`, live-verified end-to-end. The **distributed/SaaS scale tier remains infra-blocked** (ClickHouse/Postgres/Kafka/Helm/K8s, load+chaos tests, third-party pen test) — designed, with contracts + conformance suites + runbooks in place, not runnable in this environment. See per-phase `[x]`/`[~]`/`[ ]` status.
 
 ---
 
@@ -273,15 +273,15 @@
 
 **Goal:** Prove D1 (scale) and D3 (dual-mode) under real conditions, prove **Progressive Deployment (★) end-to-end across all three tiers**, and reach GA.
 
-**Deliverables**
-- [ ] **Embedded-tier distribution (★, first-class):** signed, versioned **single-file binaries** for win/linux/macOS × x64/arm64 published on release (the Phase-1 `publish-exe` job promoted to a signed release pipeline); a "download → run → works" smoke test per platform in CI; a one-page quickstart. This is the primary integration path — treat it with the same rigor as the cluster packaging below.
-- [ ] **Self-host packaging:** production Docker Compose + **Helm charts / K8s manifests**; air-gap install runbook; upgrade/migration runbook.
-- [ ] **SaaS packaging:** multi-tenant deployment topology, autoscaling for OTLP receivers + Kafka consumers, tenant onboarding/offboarding automation.
-- [ ] **Load & soak tests** proving linear horizontal scale and the ingestion SLOs at target volume; **chaos tests** (broker/node loss → no event loss).
-- [ ] Backup/restore + DR runbooks for all three stores; data-export/portability tooling.
-- [ ] Full observability of the platform itself (dogfood OTel); on-call SLO dashboards + alerting.
-- [ ] **Third-party penetration test** and remediation; compliance evidence package assembled from `GOVERNANCE.md` + audit logs.
-- [ ] Versioning/compatibility policy for contracts, plugins, and APIs published.
+**Deliverables** *(status 2026-08-06 — verifiable-here parts built + tested, 166 tests green under `-warnaserror`; branch `phase-10-ga`. Infra parts honestly deferred with seams in place.)*
+- [~] **Embedded-tier distribution (★, first-class):** the `publish-exe` matrix (win/linux/macOS × x64/arm64) now adds a **download→run→/health smoke** per native RID and **`SHA256SUMS` + optional detached ECDSA signature** (`RELEASE_SIGNING_KEY` secret; checksummed-unsigned when absent). One-page `docs/QUICKSTART.md`. *A tagged, GitHub-Release publish pipeline (vs. CI artifacts) is the remaining packaging step.*
+- [~] **Self-host packaging:** `deploy/docker-compose.yml` + `Dockerfile` authored; **air-gap + upgrade/migration runbooks written** (`docs/runbooks/`). *Helm/K8s manifests + a `docker compose up`-verified stack are infra-blocked (no Docker here).*
+- [ ] **SaaS packaging:** multi-tenant topology, autoscaling, onboarding automation. *Designed (shared-schema RLS + tenant-scoped everything is in place); deployment topology is infra-blocked.*
+- [ ] **Load & soak + chaos tests** at target volume. *Infra-blocked — needs a cluster + load harness. The seams (async channel, idempotent `(tenant, span)`, backpressure) are built and unit-tested; the on-call runbook documents the signals.*
+- [x] **Backup/restore + data-export/portability tooling** — `DataPortabilityService` + `GET /v1/export` / `POST /v1/import` (versioned bundle, idempotent, tenant-scoped, cross-store). DR runbook (`docs/runbooks/backup-restore-dr.md`). **This is also the solo→distributed migration substrate** (proven cross-store in tests + live on the exe).
+- [~] **Platform self-observability (dogfood):** `GET /v1/platform/stats` (uptime, ingest enqueued/processed/failed, queue depth, store tier) + the on-call/SLO runbook. *Historical dashboards + alerting are infra-dependent; the raw signal ships.*
+- [~] **Compliance evidence package** — `docs/COMPLIANCE_EVIDENCE.md` (assembled from `GOVERNANCE.md` + the hash-chain audit export + threat model + test evidence, mapped per framework). *Third-party penetration test is a certification prerequisite — not performed (infra/engagement).*
+- [x] **Versioning/compatibility policy** — `docs/VERSIONING.md` (contract major/minor + plugin gate, `/v1` API, MCP protocol, export-bundle format, profiles).
 
 **Key modules:** all; deploy/ops.
 
