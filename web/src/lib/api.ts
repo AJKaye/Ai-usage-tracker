@@ -98,6 +98,48 @@ export interface Alert {
   value: number | null; at: string; reference: string | null;
 }
 
+// --- Phase 12: visual workflow builder + execution ---
+export type WorkflowNodeType = 'Llm' | 'Http' | 'Agent' | 'Transform';
+export type RunState = 'Pending' | 'Running' | 'Succeeded' | 'Failed' | 'Canceled';
+export type NodeStatus = 'Pending' | 'Running' | 'Succeeded' | 'Failed' | 'Skipped' | 'Canceled';
+
+export interface NodePortDto { name: string; type?: string; required?: boolean; description?: string; }
+export interface WorkflowNodeDto {
+  id: string; type: string;                         // llm|http|agent|transform (lowercase on the wire)
+  agent_name?: string; skill_name?: string; name?: string;
+  config?: Record<string, string>;
+  inputs?: NodePortDto[]; outputs?: NodePortDto[];
+  x: number; y: number;
+}
+export interface EdgeMappingDto { from_output: string; to_input: string; }
+export interface WorkflowEdgeDto { from: string; to: string; mapping?: EdgeMappingDto[]; }
+export interface WorkflowInput { id?: string; name: string; nodes: WorkflowNodeDto[]; edges: WorkflowEdgeDto[]; }
+
+// Server shape (PascalCase enums, camelCase fields from the contract records).
+export interface WorkflowNode {
+  id: string; type: WorkflowNodeType; agentName: string | null; skillName: string | null;
+  name: string | null; config: Record<string, string>;
+  inputSchema: { name: string; type: string; required: boolean; description: string | null }[];
+  outputSchema: { name: string; type: string; required: boolean; description: string | null }[];
+  x: number; y: number;
+}
+export interface WorkflowEdge { fromNodeId: string; toNodeId: string; mapping: { fromOutput: string; toInput: string }[]; }
+export interface WorkflowDefinition {
+  id: string; tenantId: string; name: string; version: number; updatedAt: string;
+  nodes: WorkflowNode[]; edges: WorkflowEdge[];
+}
+export interface NodeRunState {
+  nodeId: string; status: NodeStatus; startedAt: string | null; endedAt: string | null;
+  spanId: string | null; error: string | null; outputPreview: string | null;
+}
+export interface WorkflowRun {
+  runId: string; workflowId: string; tenantId: string; state: RunState;
+  startedAt: string; endedAt: string | null; workflowVersion: number;
+  nodes: NodeRunState[]; error: string | null;
+}
+export interface DryRunNode { nodeId: string; kind: string; simulatedCost: number; inputTokens: number; outputTokens: number; }
+export interface DryRunProjection { order: string[]; simulatedCost: number; currency: string; perNode: DryRunNode[]; }
+
 export const api = {
   summary: () => get<UsageSummary>('/v1/summary'),
   allocation: (dimension: string) => get<AllocationResponse>(`/v1/allocation?dimension=${encodeURIComponent(dimension)}`),
@@ -112,6 +154,21 @@ export const api = {
   anomalies: () => get<AnomalyResponse>('/v1/anomalies'),
   forecast: () => get<ForecastResponse>('/v1/forecast'),
   alerts: (limit = 50) => get<Alert[]>(`/v1/alerts?limit=${limit}`),
+  // Workflow builder + execution
+  workflows: () => get<WorkflowDefinition[]>('/v1/workflows'),
+  getWorkflow: (id: string) => get<WorkflowDefinition>(`/v1/workflows/${encodeURIComponent(id)}`),
+  saveWorkflow: (w: WorkflowInput) => post<WorkflowDefinition>('/v1/workflows', w),
+  deleteWorkflow: (id: string) => del<{ deleted: string }>(`/v1/workflows/${encodeURIComponent(id)}`),
+  dryRun: (id: string, inputs: Record<string, string>) =>
+    post<DryRunProjection>(`/v1/workflows/${encodeURIComponent(id)}/dry-run`, { inputs }),
+  runWorkflow: (id: string, inputs: Record<string, string>) =>
+    post<{ runId: string }>(`/v1/workflows/${encodeURIComponent(id)}/run`, { inputs }),
+  getRun: (runId: string) => get<WorkflowRun>(`/v1/runs/${encodeURIComponent(runId)}`),
+  listRuns: (workflowId?: string) =>
+    get<WorkflowRun[]>(`/v1/runs${workflowId ? `?workflowId=${encodeURIComponent(workflowId)}` : ''}`),
+  cancelRun: (runId: string) =>
+    post<{ runId: string; cancelRequested: boolean; state: string }>(`/v1/runs/${encodeURIComponent(runId)}/cancel`, {}),
+  span: (spanId: string) => get<Record<string, unknown>>(`/v1/spans/${encodeURIComponent(spanId)}`),
 };
 
 export const fmtUsd = (n: number) =>

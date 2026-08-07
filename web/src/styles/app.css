@@ -97,7 +97,8 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .chip.verified, .chip.implemented, .chip.ok { background: var(--color-feedback-success-subtle); color: var(--color-feedback-success-fg); }
 .chip.scaffolded, .chip.warning { background: var(--color-feedback-warning-subtle); color: var(--color-feedback-warning-fg); }
 .chip.designed { background: var(--color-bg-muted); color: var(--color-text-secondary); }
-.chip.exceeded { background: var(--color-feedback-danger-subtle); color: var(--color-feedback-danger-fg); }
+.chip.exceeded, .chip.failed { background: var(--color-feedback-danger-subtle); color: var(--color-feedback-danger-fg); }
+.chip.running { background: var(--color-feedback-info-subtle); color: var(--color-feedback-info-fg); }
 
 .muted { color: var(--color-text-muted); }
 .small { font-size: 12px; }

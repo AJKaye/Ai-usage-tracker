@@ -5,6 +5,7 @@ using UsageTracker.FinOps;
 using UsageTracker.Ingestion.Otlp;
 using UsageTracker.Mcp;
 using UsageTracker.Normalization;
+using UsageTracker.Orchestration;
 using UsageTracker.Portability;
 using UsageTracker.Reconciliation;
 using UsageTracker.Security;
@@ -118,6 +119,26 @@ if (!string.IsNullOrWhiteSpace(alertWebhook))
 // Background evaluator: scans budgets + anomalies per tenant on an interval.
 builder.Services.AddSingleton<BudgetScanService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<BudgetScanService>());
+
+// --- Phase 12: visual workflow builder + execution ---------------------------
+// Tenant-scoped stores + the topological runner + the background run-executor queue.
+// Executors are registered as STUBS by default (Phase 12a); the opt-in 'execution' profile
+// (Phase 12b) swaps in the real network-calling executors + AllowlistEgressPolicy + secrets.
+// The TransformNodeExecutor is ALWAYS the real (network-free) impl — it can't leak egress.
+builder.Services.AddSingleton<IWorkflowStore, InMemoryWorkflowStore>();
+builder.Services.AddSingleton<IRunStore, InMemoryRunStore>();
+builder.Services.AddSingleton<INodeExecutor, TransformNodeExecutor>();
+builder.Services.AddSingleton<INodeExecutor, LlmNodeExecutor>();
+builder.Services.AddSingleton<INodeExecutor, HttpToolNodeExecutor>();
+builder.Services.AddSingleton<INodeExecutor, AgentLoopNodeExecutor>();
+builder.Services.AddSingleton(sp => new WorkflowRunner(
+    sp.GetServices<INodeExecutor>(),
+    sp.GetRequiredService<IIngestChannel>(),
+    sp.GetRequiredService<IRunStore>(),
+    sp.GetRequiredService<ICostEngine>(),
+    sp.GetRequiredService<TimeProvider>()));
+builder.Services.AddSingleton<WorkflowRunExecutorService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<WorkflowRunExecutorService>());
 
 // --- Phase 7: security platform services -------------------------------------
 // Tamper-evident audit sink (SOC 2 evidence) — always on.
@@ -607,6 +628,90 @@ app.MapGet("/v1/forecast", async (HttpRequest req, IEventStore store, TimeProvid
 app.MapGet("/v1/alerts", async (HttpRequest req, int? limit, IAlertSink sink, CancellationToken ct) =>
     Results.Ok(await sink.RecentAsync(Tenant(req), limit is > 0 ? limit.Value : 100, ct)));
 
+// --- Phase 12: visual workflow builder + execution API -----------------------
+// CRUD a workflow graph, dry-run it (deterministic, no network), run it (async, one run =
+// one TraceId), and poll live run state for the overlay. Tenant-scoped + audited like every
+// /v1 path. Execution of network nodes is gated by the egress guard (fails closed off the
+// 'execution' profile); the builder/dry-run/overlay work in every profile.
+
+app.MapGet("/v1/workflows", async (HttpRequest req, IWorkflowStore store, CancellationToken ct) =>
+    Results.Ok(await store.ListAsync(Tenant(req), ct)));
+
+app.MapGet("/v1/workflows/{id}", async (HttpRequest req, string id, IWorkflowStore store, CancellationToken ct) =>
+{
+    var wf = await store.GetAsync(Tenant(req), id, ct);
+    return wf is null ? Results.NotFound() : Results.Ok(wf);
+});
+
+app.MapPost("/v1/workflows", async (HttpRequest req, WorkflowDto dto, IWorkflowStore store, TimeProvider clock, CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(dto.Name))
+        return Results.BadRequest(new { error = "name is required" });
+    var wf = dto.ToDefinition(Tenant(req), clock.GetUtcNow());
+    var (ok, err) = WorkflowGraph.ValidateForSave(wf);
+    if (!ok) return Results.BadRequest(new { error = err });
+    await store.UpsertAsync(wf, ct);
+    return Results.Ok(wf);
+});
+
+app.MapDelete("/v1/workflows/{id}", async (HttpRequest req, string id, IWorkflowStore store, CancellationToken ct) =>
+{
+    await store.DeleteAsync(Tenant(req), id, ct);
+    return Results.Ok(new { deleted = id });
+});
+
+// Deterministic dry-run — walk the DAG with sample inputs, no network, no channel enqueue.
+app.MapPost("/v1/workflows/{id}/dry-run", async (HttpRequest req, string id, RunRequestDto? body,
+        IWorkflowStore store, WorkflowRunner runner, CancellationToken ct) =>
+{
+    var wf = await store.GetAsync(Tenant(req), id, ct);
+    if (wf is null) return Results.NotFound();
+    var inputs = body?.Inputs ?? new Dictionary<string, string>();
+    var projection = await runner.DryRunAsync(wf, inputs, ct);
+    return Results.Ok(projection);
+});
+
+// Trigger a run — enqueue on the background executor, return the run id fast (202).
+app.MapPost("/v1/workflows/{id}/run", async (HttpRequest req, string id, RunRequestDto? body,
+        IWorkflowStore store, IRunStore runs, WorkflowRunExecutorService exec, TimeProvider clock, CancellationToken ct) =>
+{
+    var wf = await store.GetAsync(Tenant(req), id, ct);
+    if (wf is null) return Results.NotFound();
+    var (ok, err) = WorkflowGraph.ValidateForSave(wf);
+    if (!ok) return Results.BadRequest(new { error = err });
+
+    var runId = Guid.NewGuid().ToString("n");
+    var inputs = body?.Inputs ?? new Dictionary<string, string>();
+    // Seed a Pending run so the overlay can poll immediately, before the executor picks it up.
+    await runs.UpsertAsync(new WorkflowRun
+    {
+        RunId = runId, WorkflowId = wf.Id, TenantId = wf.TenantId, WorkflowVersion = wf.Version,
+        State = RunState.Pending, StartedAt = clock.GetUtcNow(),
+        Nodes = wf.Nodes.Select(n => new NodeRunState { NodeId = n.Id }).ToList(),
+    }, ct);
+    await exec.EnqueueAsync(new RunRequest(wf, runId, inputs), ct);
+    return Results.Accepted($"/v1/runs/{runId}", new { runId });
+});
+
+// Live run state (the overlay's ~3s poll target).
+app.MapGet("/v1/runs/{runId}", async (HttpRequest req, string runId, IRunStore runs, CancellationToken ct) =>
+{
+    var run = await runs.GetAsync(Tenant(req), runId, ct);
+    return run is null ? Results.NotFound() : Results.Ok(run);
+});
+
+app.MapGet("/v1/runs", async (HttpRequest req, string? workflowId, IRunStore runs, CancellationToken ct) =>
+    Results.Ok(await runs.ListAsync(Tenant(req), workflowId, ct)));
+
+app.MapPost("/v1/runs/{runId}/cancel", async (HttpRequest req, string runId,
+        IRunStore runs, WorkflowRunExecutorService exec, CancellationToken ct) =>
+{
+    var run = await runs.GetAsync(Tenant(req), runId, ct);
+    if (run is null) return Results.NotFound();
+    var requested = exec.Cancel(runId);
+    return Results.Ok(new { runId, cancelRequested = requested, state = run.State.ToString() });
+});
+
 // --- Phase 8: Regulatory Governance matrix (backs the in-product governance page) ---
 // Parsed live from GOVERNANCE.md so the page never drifts from the maintained source.
 // Public (compliance disclosure). GOVERNANCE.md is copied next to the exe at publish;
@@ -737,6 +842,112 @@ public sealed record ScoreDto
     [System.Text.Json.Serialization.JsonPropertyName("category")] public string? Category { get; init; }
     [System.Text.Json.Serialization.JsonPropertyName("boolean")] public bool? Boolean { get; init; }
     [System.Text.Json.Serialization.JsonPropertyName("source")] public string? Source { get; init; }
+}
+
+// Wire DTOs for the Phase-12 workflow API (snake_case JSON like the other DTOs). Map DTO →
+// contract in ToDefinition so the SPA never posts server-owned fields (TenantId/Version stamped here).
+public sealed record WorkflowDto
+{
+    [System.Text.Json.Serialization.JsonPropertyName("id")] public string? Id { get; init; }
+    [System.Text.Json.Serialization.JsonPropertyName("name")] public string? Name { get; init; }
+    [System.Text.Json.Serialization.JsonPropertyName("version")] public int? Version { get; init; }
+    [System.Text.Json.Serialization.JsonPropertyName("nodes")] public List<WorkflowNodeDto>? Nodes { get; init; }
+    [System.Text.Json.Serialization.JsonPropertyName("edges")] public List<WorkflowEdgeDto>? Edges { get; init; }
+
+    public UsageTracker.Contracts.WorkflowDefinition ToDefinition(string tenantId, DateTimeOffset now) => new()
+    {
+        Id = string.IsNullOrWhiteSpace(Id) ? Guid.NewGuid().ToString("n") : Id!,
+        TenantId = tenantId,
+        Name = Name!,
+        Version = Version is > 0 ? Version.Value : 1,
+        UpdatedAt = now,
+        Nodes = (Nodes ?? new()).Select(n => n.ToNode()).ToList(),
+        Edges = (Edges ?? new()).Select(e => e.ToEdge()).ToList(),
+    };
+}
+
+public sealed record WorkflowNodeDto
+{
+    [System.Text.Json.Serialization.JsonPropertyName("id")] public string? Id { get; init; }
+    [System.Text.Json.Serialization.JsonPropertyName("type")] public string? Type { get; init; }   // llm|http|agent|transform
+    [System.Text.Json.Serialization.JsonPropertyName("agent_name")] public string? AgentName { get; init; }
+    [System.Text.Json.Serialization.JsonPropertyName("skill_name")] public string? SkillName { get; init; }
+    [System.Text.Json.Serialization.JsonPropertyName("name")] public string? Name { get; init; }
+    [System.Text.Json.Serialization.JsonPropertyName("config")] public Dictionary<string, string>? Config { get; init; }
+    [System.Text.Json.Serialization.JsonPropertyName("inputs")] public List<NodePortDto>? Inputs { get; init; }
+    [System.Text.Json.Serialization.JsonPropertyName("outputs")] public List<NodePortDto>? Outputs { get; init; }
+    [System.Text.Json.Serialization.JsonPropertyName("x")] public double X { get; init; }
+    [System.Text.Json.Serialization.JsonPropertyName("y")] public double Y { get; init; }
+
+    public UsageTracker.Contracts.WorkflowNode ToNode() => new()
+    {
+        Id = string.IsNullOrWhiteSpace(Id) ? Guid.NewGuid().ToString("n") : Id!,
+        Type = ParseType(Type),
+        AgentName = AgentName,
+        SkillName = SkillName,
+        Name = Name,
+        Config = Config ?? new(),
+        InputSchema = (Inputs ?? new()).Select(p => p.ToPort()).ToList(),
+        OutputSchema = (Outputs ?? new()).Select(p => p.ToPort()).ToList(),
+        X = X,
+        Y = Y,
+    };
+
+    private static UsageTracker.Contracts.WorkflowNodeType ParseType(string? t) => (t ?? "").ToLowerInvariant() switch
+    {
+        "llm" => UsageTracker.Contracts.WorkflowNodeType.Llm,
+        "http" => UsageTracker.Contracts.WorkflowNodeType.Http,
+        "agent" => UsageTracker.Contracts.WorkflowNodeType.Agent,
+        _ => UsageTracker.Contracts.WorkflowNodeType.Transform,
+    };
+}
+
+public sealed record NodePortDto
+{
+    [System.Text.Json.Serialization.JsonPropertyName("name")] public string? Name { get; init; }
+    [System.Text.Json.Serialization.JsonPropertyName("type")] public string? Type { get; init; }   // text|json|number|boolean
+    [System.Text.Json.Serialization.JsonPropertyName("required")] public bool Required { get; init; }
+    [System.Text.Json.Serialization.JsonPropertyName("description")] public string? Description { get; init; }
+
+    public UsageTracker.Contracts.NodePort ToPort() => new()
+    {
+        Name = Name ?? "input",
+        Type = (Type ?? "").ToLowerInvariant() switch
+        {
+            "json" => UsageTracker.Contracts.PortType.Json,
+            "number" => UsageTracker.Contracts.PortType.Number,
+            "boolean" => UsageTracker.Contracts.PortType.Boolean,
+            _ => UsageTracker.Contracts.PortType.Text,
+        },
+        Required = Required,
+        Description = Description,
+    };
+}
+
+public sealed record WorkflowEdgeDto
+{
+    [System.Text.Json.Serialization.JsonPropertyName("from")] public string? From { get; init; }
+    [System.Text.Json.Serialization.JsonPropertyName("to")] public string? To { get; init; }
+    [System.Text.Json.Serialization.JsonPropertyName("mapping")] public List<EdgeMappingDto>? Mapping { get; init; }
+
+    public UsageTracker.Contracts.WorkflowEdge ToEdge() => new()
+    {
+        FromNodeId = From ?? "",
+        ToNodeId = To ?? "",
+        Mapping = (Mapping ?? new()).Select(m => new UsageTracker.Contracts.EdgeMapping(m.From ?? "", m.To ?? "")).ToList(),
+    };
+}
+
+public sealed record EdgeMappingDto
+{
+    [System.Text.Json.Serialization.JsonPropertyName("from_output")] public string? From { get; init; }
+    [System.Text.Json.Serialization.JsonPropertyName("to_input")] public string? To { get; init; }
+}
+
+// Body for POST /v1/workflows/{id}/run and /dry-run: the initial input bag for start nodes.
+public sealed record RunRequestDto
+{
+    [System.Text.Json.Serialization.JsonPropertyName("inputs")] public Dictionary<string, string>? Inputs { get; init; }
 }
 
 // Exposed so the test project can spin up the API via WebApplicationFactory.

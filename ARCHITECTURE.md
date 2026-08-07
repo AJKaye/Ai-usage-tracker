@@ -279,6 +279,18 @@ Wire adapters into each framework's native telemetry rather than re-instrumentin
 
 ---
 
+## 7.5 Agent-workflow orchestration & live execution *(built: Phase 12)*
+
+Beyond *observing* usage, the tracker can *orchestrate* it: a low-code, drag-and-drop builder where **agents** perform **skills** in an order and hand off to each other, each node with custom inputs/outputs, and the tracker **executes** the graph (LLM / HTTP / agent-loop / transform nodes) with a live overlay. The design reuses §3 + §6 rather than adding a parallel path:
+
+- **Execution is a telemetry producer.** Each executed node builds a canonical `Span` (§3) and enqueues it on the same `IIngestChannel` the OTLP/proxy/adapter paths use; the background consumer costs it (§4) and stores it. So **cost, allocation, budgets, efficiency, FOCUS, and anomaly detection (§6) apply to executed workflows automatically** — no new analytics.
+- **Run = trace, handoff = parent→child span.** One workflow run is one `TraceId` (the run id); each node's step is a span whose `ParentSpanId` is the upstream node's span. A run's telemetry is exactly `SpanQuery{TraceId=runId}`, and the handoff graph is the span tree.
+- **Node binding by dimension.** A node's `agent`/`skill` are stamped onto its span's `Metadata` (keys `agent`/`skill`, the tag-free §6.2 dimensions), so the overlay + allocation bind observed cost/latency/tokens back to the node without upstream tags.
+- **Deterministic dry-run** projects execution order + cost with no network and enqueues nothing — validate a design before it has real telemetry.
+- **Opt-in, egress-gated execution (D6).** The default build stays air-gapped; real network nodes run only under an opt-in `execution` profile that permits egress to a configured host allowlist and resolves provider keys via `ISecretProvider` by name (never stored). Transform nodes are pure/offline and always safe.
+
+---
+
 ## 8. Recommended architecture for the tracker
 
 ### 8.1 Component diagram

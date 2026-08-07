@@ -315,6 +315,26 @@
 
 ---
 
+## Phase 12 — Visual Agent Workflow Builder + Live Execution
+
+**Goal:** Turn the tracker from a passive observer into an **active orchestrator**. A low-code **drag-and-drop builder** lets a tenant place "agents" that perform "skills" in an order and hand off to each other, each node with custom inputs/outputs; the tracker **executes** the workflow (LLM / HTTP / agent-loop / transform nodes) with a **live overlay** while it runs. The load-bearing design: each executed node emits a canonical `Span` on the existing `IIngestChannel`, so **cost/allocation/budgets/efficiency apply to executed workflows for free** — execution is a new *producer* of the telemetry the tracker already consumes. One run = one `TraceId`; a handoff = a parent→child span; nodes bind to telemetry by `Metadata["agent"]`/`["skill"]`. See `docs/adr/0012-workflow-execution.md`.
+
+**Phase 12a — builder + model + live overlay (executor stubs + dry-run).** *(status 2026-08-07 — built + tested end-to-end, 213 tests green under `-warnaserror`; branch `feat-workflow-builder`. Runs fully offline: the stub executors emit costed spans with no network.)*
+- [x] **Contracts** (`Contracts/Workflows.cs`): `WorkflowDefinition`/`WorkflowNode`/`WorkflowEdge`/`EdgeMapping`/`NodePort` (custom IO), `WorkflowRun`/`NodeRunState`, `IWorkflowStore`/`IRunStore`, `INodeExecutor` + `NodeExecutionContext`/`Result`. String-serialized enums.
+- [x] **Engine** (`UsageTracker.Orchestration`, new project): `WorkflowGraph` (Kahn topo + cycle detection + `ValidateForSave`), `WorkflowRunner` (topo-walk, edge input-mapping, parent-span handoffs, binding-metadata stamping, per-node run-state, poison-isolation, cancellation, **deterministic dry-run that enqueues nothing**), `Executors` (4 `INodeExecutor`s — `TransformNodeExecutor` fully real/network-free; `Llm`/`Http`/`Agent` are 12a stubs emitting costed spans), `InMemoryWorkflowStore`/`InMemoryRunStore`.
+- [x] **API + background runner** (`Ingestion.Api`): `WorkflowRunExecutorService` (BackgroundService + bounded queue + cancel registry, mirrors `BudgetScanService`); endpoints `GET/POST/DELETE /v1/workflows(+/{id})`, `POST /v1/workflows/{id}/run` (202), `GET /v1/runs/{runId}`, `GET /v1/runs?workflowId=`, `POST /v1/runs/{runId}/cancel`, `POST /v1/workflows/{id}/dry-run`; snake_case DTOs.
+- [x] **SPA** (`web/`): `@xyflow/react` drag-drop builder (`Workflows.tsx` — custom node cards role-token-styled, node palette, per-node config/IO side panel, edge-drag, Save/Dry-run/Run) + live overlay (`WorkflowRun.tsx` — 3s polling, node status chips, per-node cost from `/v1/spans`, animated active handoff). `reactflow-theme.css` maps xyflow's CSS custom props → role tokens (zero raw hex; reduced-motion honored). `.running`/`.failed` chips.
+
+**Phase 12b — real execution + egress/secrets (PENDING).** Opt-in `execution` profile: `AllowlistEgressPolicy` (`IEgressGuard` permitting only configured hosts, fail-closed otherwise) + `LocalSecretProvider` (`ISecretProvider` by name); real `LlmNodeExecutor` (Anthropic `POST /v1/messages`, egress-assert + secret-by-name, maps `usage.*`→cost), `HttpToolNodeExecutor` (allowlist), `AgentLoopNodeExecutor` (bounded LLM+tool loop). `WorkflowEgressTests` (fail-closed tripwire). Live-verify with a real key against `api.anthropic.com`, and that `solo` fails closed at the LLM node.
+
+**Exit criteria:** a tenant can visually build an agent→skill→handoff graph with custom IO, dry-run it (deterministic order + projected cost), run it, and watch a live overlay color nodes + show per-node cost as spans land — with the run's spend rolling into the tenant's normal cost/summary/budgets. 12b: real LLM/HTTP/agent nodes execute under the opt-in egress-gated `execution` profile.
+
+**Verification:** `WorkflowGraphTests` (topo, cycle reject, mapping), `WorkflowRunnerTests` (transform determinism + tripwire, dry-run no-enqueue, handoff parentage, failed-upstream skip), `WorkflowE2ETests` via `EphemeralApiFactory` (create → dry-run → run → poll → spans carry agent+skill → cost in `/v1/summary` → tenant isolation → cycle reject → cancel 404). Live-verified on the exe: builder renders on-brand, a 3-node workflow runs 3/3 with the LLM span tagged agent+skill and cost in summary. 12b adds egress fail-closed tests + a real-key live-verify.
+
+**Out of scope (deferred, not re-scoped):** durable (SQLite/DuckDB) workflow/run stores (in-memory per the established pattern); SSE/WebSocket push (polling only); a visual expression editor for the transform node (small fixed op set); non-Anthropic LLM executors (contract supports adding them); human-in-the-loop / approval nodes; scheduled/triggered runs (manual `POST /run` only).
+
+---
+
 ## Continuous workstreams (every phase, not a phase)
 
 - **Security:** threat-model updates, dependency/secret/SBOM scanning in CI, per-endpoint authZ + audit + tenancy, `GOVERNANCE.md` kept current.

@@ -1,0 +1,86 @@
+/* Re-skin @xyflow/react to the design-system role tokens (zero raw hex here — every value
+   is a var(--token), honoring the "role tokens only" contract). @xyflow exposes its own CSS
+   custom properties; we re-point them at our semantic tokens so light/dark + [data-theme]
+   white-label "just work". Scope everything under .wf-canvas so the vendor stylesheet never
+   leaks its defaults into the rest of the app. */
+
+.wf-canvas {
+  /* xyflow surface + edges */
+  --xy-background-color: var(--color-bg-canvas);
+  --xy-edge-stroke: var(--color-border-strong);
+  --xy-edge-stroke-selected: var(--color-border-focus);
+  --xy-connectionline-stroke: var(--color-border-focus);
+
+  /* handles (connection ports) */
+  --xy-handle-background-color: var(--color-brand-solid);
+  --xy-handle-border-color: var(--color-bg-surface);
+
+  /* controls + minimap chrome */
+  --xy-controls-button-background-color: var(--color-bg-surface);
+  --xy-controls-button-background-color-hover: var(--color-bg-muted);
+  --xy-controls-button-color: var(--color-text-primary);
+  --xy-controls-button-border-color: var(--color-border-subtle);
+  --xy-minimap-background-color: var(--color-bg-surface-sunken);
+
+  /* selection + attribution */
+  --xy-selection-background-color: var(--color-brand-subtle);
+  --xy-attribution-background-color: transparent;
+
+  background: var(--color-bg-canvas);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  height: 62vh;
+  min-height: 420px;
+}
+
+/* Custom node card — reuses the card tokens; a left accent bar keys off the node type via
+   the --wf-accent custom prop set inline (mapped to --chart-cat-* by the node component). */
+.wf-node {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-left: 3px solid var(--wf-accent, var(--color-border-strong));
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-1);
+  padding: var(--space-3) var(--space-4);
+  min-width: 168px;
+  color: var(--color-text-primary);
+  font-size: var(--fs-sm);
+}
+.wf-node.selected { border-color: var(--color-border-focus); box-shadow: var(--shadow-2); }
+.wf-node .wf-node-title { font-weight: var(--fw-semibold); display: flex; align-items: center; gap: var(--space-2); }
+.wf-node .wf-node-sub { color: var(--color-text-muted); font-size: var(--fs-xs); margin-top: var(--space-1); }
+.wf-node .wf-node-kind { font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: .04em; color: var(--color-text-secondary); }
+
+/* xyflow handles → brand dots that respect focus */
+.wf-canvas .react-flow__handle {
+  width: 9px; height: 9px;
+  background: var(--color-brand-solid);
+  border: 1.5px solid var(--color-bg-surface);
+}
+.wf-canvas .react-flow__handle:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* Live run overlay: node status tints (role/feedback tokens only). */
+.wf-node.status-Running   { --wf-accent: var(--color-feedback-info-solid); box-shadow: 0 0 0 2px var(--color-feedback-info-subtle); }
+.wf-node.status-Succeeded { --wf-accent: var(--color-feedback-success-solid); }
+.wf-node.status-Failed    { --wf-accent: var(--color-feedback-danger-solid); }
+.wf-node.status-Skipped   { --wf-accent: var(--color-border-subtle); opacity: .6; }
+.wf-node.status-Canceled  { --wf-accent: var(--color-border-strong); opacity: .7; }
+
+/* The active edge pulses while a run is live — but ONLY when motion is allowed. The global
+   app.css reduced-motion rule also disables CSS animation app-wide; we additionally pass
+   animated={false} to xyflow (JS-driven) under reduced-motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .wf-canvas .react-flow__edge.wf-edge-active .react-flow__edge-path {
+    stroke: var(--color-brand-solid);
+    stroke-width: 2.5;
+  }
+}
+
+/* Node config / IO side panel */
+.wf-panel { display: grid; gap: var(--space-4); }
+.wf-panel .wf-field { display: grid; gap: var(--space-2); }
+.wf-panel .wf-field > span { font-size: var(--fs-xs); color: var(--color-text-muted); }
+.wf-port-row { display: flex; justify-content: space-between; gap: var(--space-2); align-items: center; }

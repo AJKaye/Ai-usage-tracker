@@ -16,6 +16,7 @@
     <ProjectReference Include="..\UsageTracker.Ingestion.Otlp\UsageTracker.Ingestion.Otlp.csproj" />
     <ProjectReference Include="..\UsageTracker.Reconciliation\UsageTracker.Reconciliation.csproj" />
     <ProjectReference Include="..\UsageTracker.FinOps\UsageTracker.FinOps.csproj" />
+    <ProjectReference Include="..\UsageTracker.Orchestration\UsageTracker.Orchestration.csproj" />
     <ProjectReference Include="..\UsageTracker.Security\UsageTracker.Security.csproj" />
     <ProjectReference Include="..\UsageTracker.Mcp\UsageTracker.Mcp.csproj" />
     <ProjectReference Include="..\UsageTracker.Portability\UsageTracker.Portability.csproj" />

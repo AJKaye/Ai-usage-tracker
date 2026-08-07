@@ -3,6 +3,8 @@ import { NavLink, Route, Routes } from 'react-router-dom'
 import { Dashboard } from './pages/Dashboard'
 import { Allocation } from './pages/Allocation'
 import { Budgets } from './pages/Budgets'
+import { Workflows } from './pages/Workflows'
+import { WorkflowRun } from './pages/WorkflowRun'
 import { Efficiency } from './pages/Efficiency'
 import { Governance } from './pages/Governance'
 import { Integrations } from './pages/Integrations'
@@ -33,6 +35,7 @@ export function App() {
         <NavLink to="/" end className="nav-link">Dashboard</NavLink>
         <NavLink to="/allocation" className="nav-link">Allocation</NavLink>
         <NavLink to="/budgets" className="nav-link">Budgets &amp; Alerts</NavLink>
+        <NavLink to="/workflows" className="nav-link">Workflows</NavLink>
         <NavLink to="/efficiency" className="nav-link">Efficiency</NavLink>
         <NavLink to="/integrations" className="nav-link">Integrations</NavLink>
         <NavLink to="/governance" className="nav-link">Regulatory Governance</NavLink>
@@ -44,6 +47,8 @@ export function App() {
               <Route path="/" element={<>Cost &amp; Usage</>} />
               <Route path="/allocation" element={<>Cost Allocation</>} />
               <Route path="/budgets" element={<>Budgets &amp; Alerts</>} />
+              <Route path="/workflows" element={<>Agent Workflows</>} />
+              <Route path="/runs/:runId" element={<>Workflow Run</>} />
               <Route path="/efficiency" element={<>Efficiency</>} />
               <Route path="/integrations" element={<>Integrations — connect your tools</>} />
               <Route path="/governance" element={<>Regulatory Governance</>} />
@@ -69,6 +74,8 @@ export function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/allocation" element={<Allocation />} />
           <Route path="/budgets" element={<Budgets />} />
+          <Route path="/workflows" element={<Workflows />} />
+          <Route path="/runs/:runId" element={<WorkflowRun />} />
           <Route path="/efficiency" element={<Efficiency />} />
           <Route path="/integrations" element={<Integrations />} />
           <Route path="/governance" element={<Governance />} />
